@@ -14,6 +14,8 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
   final _formKey = GlobalKey<FormState>();
   final _storeNameController = TextEditingController();
   final _phoneController = TextEditingController();
+  final _addressController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
@@ -25,6 +27,8 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
   void dispose() {
     _storeNameController.dispose();
     _phoneController.dispose();
+    _addressController.dispose();
+    _descriptionController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
@@ -48,11 +52,23 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
         category: _selectedCategory,
       );
 
+      // Save additional vendor details (address & description)
+      if (userModel.uid.isNotEmpty) {
+        await AuthService.instance.updateVendorProfile(
+          uid: userModel.uid,
+          name: _storeNameController.text,
+          phone: _phoneController.text,
+          category: _selectedCategory,
+          address: _addressController.text.trim(),
+          description: _descriptionController.text.trim(),
+        );
+      }
+
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Vendor registration submitted! Store Status: PENDING APPROVAL.'),
+          content: const Text('Vendor registration submitted! Store Status: PENDING APPROVAL.'),
           backgroundColor: Colors.orange.shade800,
           duration: const Duration(seconds: 3),
         ),
@@ -154,7 +170,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               ],
 
               // Store Name
-              const Text('Store / Business Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text('Store / Business Name *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _storeNameController,
@@ -172,7 +188,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Business Category Dropdown
-              const Text('Business Category', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text('Business Category *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
                 value: availableCategories.contains(_selectedCategory) ? _selectedCategory : availableCategories.first,
@@ -187,7 +203,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Phone Number Field
-              const Text('Phone Number', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text('Phone Number *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
               const SizedBox(height: 6),
               TextFormField(
                 controller: _phoneController,
@@ -198,10 +214,45 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
                 ),
                 validator: (value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Please enter a valid phone number.';
+                    return 'Please enter your phone number.';
+                  }
+                  final cleanDigits = value.replaceAll(RegExp(r'\D'), '');
+                  if (cleanDigits.length < 10) {
+                    return 'Please enter a valid 10-digit phone number.';
                   }
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+
+              // Business Address Field
+              const Text('Business Address *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _addressController,
+                decoration: const InputDecoration(
+                  hintText: 'e.g. 42 Usaman Road, T. Nagar, Chennai',
+                  prefixIcon: Icon(Icons.location_on_outlined),
+                ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Please enter your business address.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 16),
+
+              // Business Description Field
+              const Text('Business Description (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const SizedBox(height: 6),
+              TextFormField(
+                controller: _descriptionController,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  hintText: 'Briefly describe your products & clearance deals...',
+                  prefixIcon: Icon(Icons.description_outlined),
+                ),
               ),
               const SizedBox(height: 16),
 

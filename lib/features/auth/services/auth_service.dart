@@ -230,6 +230,83 @@ class AuthService {
     return null;
   }
 
+  /// Fetch vendor store profile from Cloud Firestore
+  Future<VendorModel?> fetchVendorProfile(String uid) async {
+    try {
+      final doc = await _firestore.collection('vendors').doc(uid).get();
+      if (doc.exists) {
+        return VendorModel.fromFirestore(doc);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ Error fetching vendor profile for $uid: $e');
+      }
+    }
+    return null;
+  }
+
+  /// Update permitted vendor business profile fields in Cloud Firestore
+  Future<VendorModel> updateVendorProfile({
+    required String uid,
+    required String name,
+    required String phone,
+    required String category,
+    String? address,
+    String? description,
+    String? imageUrl,
+  }) async {
+    final now = DateTime.now();
+    final existingVendor = await fetchVendorProfile(uid);
+
+    final updatedVendor = VendorModel(
+      uid: uid,
+      name: name.trim(),
+      phone: phone.trim(),
+      category: category,
+      address: address?.trim(),
+      description: description?.trim(),
+      imageUrl: imageUrl?.trim(),
+      latitude: existingVendor?.latitude ?? 13.0827,
+      longitude: existingVendor?.longitude ?? 80.2707,
+      geohash: existingVendor?.geohash ?? 'tf340w',
+      createdAt: existingVendor?.createdAt ?? now,
+      updatedAt: now,
+    );
+
+    try {
+      // 1. Update vendors/{uid} document
+      await _firestore.collection('vendors').doc(uid).set(
+        updatedVendor.toFirestore(),
+        SetOptions(merge: true),
+      );
+
+      // 2. Update users/{uid} displayName
+      await _firestore.collection('users').doc(uid).update({
+        'displayName': name.trim(),
+        'updatedAt': Timestamp.fromDate(now),
+      });
+
+      // 3. Keep in-memory profile in sync
+      if (_demoCurrentUser != null && _demoCurrentUser!.uid == uid) {
+        _demoCurrentUser = UserModel(
+          uid: _demoCurrentUser!.uid,
+          displayName: name.trim(),
+          email: _demoCurrentUser!.email,
+          role: _demoCurrentUser!.role,
+          approvalStatus: _demoCurrentUser!.approvalStatus,
+          createdAt: _demoCurrentUser!.createdAt,
+          updatedAt: now,
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('ℹ️ Vendor profile update warning: $e');
+      }
+    }
+
+    return updatedVendor;
+  }
+
   /// Sign out current authenticated user
   Future<void> signOut() async {
     try {

@@ -23,6 +23,7 @@ class UserModel {
   bool get isCustomer => role == 'customer';
   bool get isApprovedVendor => isVendor && approvalStatus == 'approved';
   bool get isPendingVendor => isVendor && approvalStatus == 'pending';
+  bool get isRejectedVendor => isVendor && (approvalStatus == 'rejected' || approvalStatus == 'suspended');
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};

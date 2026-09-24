@@ -93,7 +93,7 @@ service cloud.firestore {
       allow create: if isOwner(uid)
         && isVendor()
         && request.resource.data.keys().hasAll(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'address', 'description', 'imageUrl', 'createdAt', 'updatedAt'])
         && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
         && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 20
         && request.resource.data.category is string && request.resource.data.category.size() >= 1 && request.resource.data.category.size() <= 50
@@ -105,7 +105,7 @@ service cloud.firestore {
       // Vendor can update their profile fields (cannot change createdAt or owner uid)
       allow update: if isOwner(uid)
         && isVendor()
-        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt', 'updatedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'address', 'description', 'imageUrl', 'createdAt', 'updatedAt'])
         && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
         && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 20
         && request.resource.data.category is string && request.resource.data.category.size() >= 1 && request.resource.data.category.size() <= 50

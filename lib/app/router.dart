@@ -6,6 +6,7 @@ import '../features/auth/screens/register_vendor_screen.dart';
 import '../features/customer/screens/customer_home_screen.dart';
 import '../features/vendor/screens/vendor_dashboard_screen.dart';
 import '../features/vendor/screens/create_offer_screen.dart';
+import '../features/vendor/screens/vendor_profile_screen.dart';
 import '../features/profile/screens/profile_screen.dart';
 
 class AppRoutes {
@@ -16,6 +17,7 @@ class AppRoutes {
   static const String customerHome = '/customer/home';
   static const String vendorDashboard = '/vendor/dashboard';
   static const String createOffer = '/vendor/create-offer';
+  static const String vendorProfile = '/vendor/profile';
   static const String profile = '/profile';
 
   static Route<dynamic> generateRoute(
@@ -37,8 +39,13 @@ class AppRoutes {
         return MaterialPageRoute(builder: (_) => const VendorDashboardScreen());
       case createOffer:
         return MaterialPageRoute(builder: (_) => const CreateOfferScreen());
+      case vendorProfile:
+        return MaterialPageRoute(builder: (_) => const VendorProfileScreen());
       case profile:
         final role = settings.arguments as String? ?? 'customer';
+        if (role == 'vendor') {
+          return MaterialPageRoute(builder: (_) => const VendorProfileScreen());
+        }
         return MaterialPageRoute(
           builder: (_) => ProfileScreen(
             userRole: role,

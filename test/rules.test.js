@@ -330,3 +330,54 @@ test('10. Profile schema tampering (extra arbitrary fields) is rejected', async 
   );
 });
 
+// Helper to seed vendor document using admin context
+async function seedVendor(uid, name, phone, category, createdAt = new Date()) {
+  await testEnv.withSecurityRulesDisabled(async (context) => {
+    const db = context.firestore();
+    await db.collection('vendors').doc(uid).set({
+      name,
+      phone,
+      category,
+      latitude: 13.0827,
+      longitude: 80.2707,
+      geohash: 'tf340w',
+      createdAt,
+    });
+  });
+}
+
+test('11. Vendor can update permitted profile fields on their own document', async () => {
+  const seededTime = new Date();
+  await seedUser('vendorUpdateOwner', 'vendor', 'pending', 'Store Owner');
+  await seedVendor('vendorUpdateOwner', 'Original Store', '9876543210', 'Groceries', seededTime);
+
+  const vendorDb = testEnv.authenticatedContext('vendorUpdateOwner').firestore();
+
+  // Vendor updating their own store fields succeeds
+  await assertSucceeds(
+    vendorDb.collection('vendors').doc('vendorUpdateOwner').update({
+      name: 'Updated Store Name',
+      phone: '9876543210',
+      category: 'Produce',
+      address: '42 Usman Road, T. Nagar, Chennai',
+      description: 'Updated clearance store description',
+    })
+  );
+});
+
+test('12. Vendor cannot update another vendor profile document', async () => {
+  await seedUser('vendorA', 'vendor', 'approved', 'Store A');
+  await seedUser('vendorB', 'vendor', 'approved', 'Store B');
+  await seedVendor('vendorB', 'Store B', '9876543210', 'Groceries');
+
+  const vendorADb = testEnv.authenticatedContext('vendorA').firestore();
+
+  // Vendor A attempting to update Vendor B profile fails
+  await assertFails(
+    vendorADb.collection('vendors').doc('vendorB').update({
+      name: 'Hacked Store B Name',
+    })
+  );
+});
+
+
