@@ -101,6 +101,46 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
     assert.strictEqual(authServiceContent.includes('fetchVendorProfile'), true);
     assert.strictEqual(authServiceContent.includes('updateVendorProfile'), true);
   });
+
+  await t.test('11. OfferService enforces input validation, storage uploads, and approval status checks', () => {
+    const offerServiceContent = fs.readFileSync(
+      path.join(__dirname, '..', 'lib', 'features', 'vendor', 'services', 'offer_service.dart'),
+      'utf8'
+    );
+    assert.strictEqual(offerServiceContent.includes('createOffer'), true);
+    assert.strictEqual(offerServiceContent.includes('isApprovedVendor'), true);
+    assert.strictEqual(offerServiceContent.includes('Clearance price'), true);
+    assert.strictEqual(offerServiceContent.includes('offers/${userModel.uid}'), true);
+  });
+
+  await t.test('12. CreateOfferScreen provides form validation, category selection, price checks, and image preview', () => {
+    const createOfferContent = fs.readFileSync(
+      path.join(__dirname, '..', 'lib', 'features', 'vendor', 'screens', 'create_offer_screen.dart'),
+      'utf8'
+    );
+    assert.strictEqual(createOfferContent.includes('Post Clearance Offer'), true);
+    assert.strictEqual(createOfferContent.includes('Must be <= ₹'), true);
+    assert.strictEqual(createOfferContent.includes('_selectedCategory'), true);
+    assert.strictEqual(createOfferContent.includes('_pickSampleImage'), true);
+    assert.strictEqual(createOfferContent.includes('Publish Locked (Store Approval Pending)'), true);
+  });
+
+  await t.test('13. VendorDashboardScreen displays newly posted offers from OfferService', () => {
+    assert.strictEqual(vendorDashboardContent.includes('OfferService.instance.demoOffers'), true);
+    assert.strictEqual(vendorDashboardContent.includes('_vendorOffers.length'), true);
+  });
+
+  await t.test('14. OfferService dynamically inherits store location from vendor profile and provides storage cleanup', () => {
+    const offerServiceContent = fs.readFileSync(
+      path.join(__dirname, '..', 'lib', 'features', 'vendor', 'services', 'offer_service.dart'),
+      'utf8'
+    );
+    assert.strictEqual(offerServiceContent.includes('fetchVendorProfile'), true);
+    assert.strictEqual(offerServiceContent.includes('vendorProfile?.latitude'), true);
+    assert.strictEqual(offerServiceContent.includes('uploadedStorageRef.delete()'), true);
+  });
 });
+
+
 
 

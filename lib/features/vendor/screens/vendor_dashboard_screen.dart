@@ -31,9 +31,13 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
           createdAt: DateTime.now(),
         );
 
-    _vendorOffers = MockData.getMockOffers()
-        .where((o) => o.vendorId == MockData.sampleVendor.uid)
-        .toList();
+    _refreshOffers();
+  }
+
+  void _refreshOffers() {
+    final posted = OfferService.instance.demoOffers.where((o) => o.vendorId == _currentVendorUser.uid || o.vendorId == MockData.sampleVendor.uid);
+    final mock = MockData.getMockOffers().where((o) => o.vendorId == MockData.sampleVendor.uid);
+    _vendorOffers = [...posted, ...mock];
   }
 
   @override
@@ -220,7 +224,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
               children: [
                 MetricCard(
                   title: 'Active Offers',
-                  value: '${_metrics['activeOffers']}',
+                  value: '${_vendorOffers.length}',
                   icon: Icons.local_offer,
                   color: Theme.of(context).colorScheme.primary,
                 ),
