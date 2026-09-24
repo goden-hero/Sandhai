@@ -1,0 +1,45 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Helper to check if authenticated user is an approved vendor in Firestore
+    function isApprovedVendor() {
+      return request.auth != null
+        && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid))
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role == 'vendor'
+        && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved';
+    }
+
+    // --- OFFER IMAGES ---
+    // Path structure: offers/{vendorId}/{filename}
+    match /offers/{vendorId}/{fileName} {
+      // Public read access so customers can view offer images
+      allow read: if true;
+
+      // Upload/write rules:
+      // 1. Must be authenticated
+      // 2. Authenticated UID must match the vendorId in the path
+      // 3. Must be an approved vendor in Firestore (pending vendors & customers blocked)
+      // 4. Must be an image MIME type (png, jpeg, jpg, webp)
+      // 5. File size must be <= 5MB (5,242,880 bytes)
+      allow write: if request.auth != null
+        && request.auth.uid == vendorId
+        && isApprovedVendor()
+        && request.resource.contentType.matches('image/(png|jpeg|jpg|webp)')
+        && request.resource.size <= 5 * 1024 * 1024;
+    }
+
+    // Path structure with offerId: offers/{vendorId}/{offerId}/{filename}
+    match /offers/{vendorId}/{offerId}/{fileName} {
+      allow read: if true;
+
+      allow write: if request.auth != null
+        && request.auth.uid == vendorId
+        && isApprovedVendor()
+        && request.resource.contentType.matches('image/(png|jpeg|jpg|webp)')
+        && request.resource.size <= 5 * 1024 * 1024;
+    }
+  }
+}
+

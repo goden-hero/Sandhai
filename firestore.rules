@@ -1,0 +1,171 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- HELPER FUNCTIONS ---
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    // Fetches profile document of authenticated user
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Checks if user is authenticated AND has role 'vendor' in their profile
+    function isVendor() {
+      return isAuthenticated() 
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && getUserData().role == 'vendor';
+    }
+
+    // Checks if user is authenticated AND is a vendor with APPROVED status
+    function isApprovedVendor() {
+      return isVendor() && (getUserData().approvalStatus == 'approved');
+    }
+
+    function isValidRole(role) {
+      return role == 'customer' || role == 'vendor';
+    }
+
+    function isValidGeohash(hash) {
+      return hash is string && hash.size() >= 1 && hash.size() <= 12;
+    }
+
+    function isValidLat(lat) {
+      return (lat is int || lat is float) && lat >= -90.0 && lat <= 90.0;
+    }
+
+    function isValidLng(lng) {
+      return (lng is int || lng is float) && lng >= -180.0 && lng <= 180.0;
+    }
+
+    // --- USERS COLLECTION ---
+    // Document ID: {uid}
+    match /users/{uid} {
+      // Users can only read their own private profile
+      allow read: if isOwner(uid);
+
+      // Initial user profile creation (during registration)
+      // Enforces that new Vendors MUST be initialized with approvalStatus == 'pending'
+      // Strictly enforces valid keys to prevent arbitrary field injection
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasAll(['displayName', 'email', 'role', 'approvalStatus', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'approvalStatus', 'createdAt', 'updatedAt'])
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.email is string
+        && isValidRole(request.resource.data.role)
+        && (
+          (request.resource.data.role == 'vendor' && request.resource.data.approvalStatus == 'pending') ||
+          (request.resource.data.role == 'customer' && (request.resource.data.approvalStatus == 'approved' || request.resource.data.approvalStatus == 'n/a'))
+        )
+        && request.resource.data.createdAt is timestamp;
+
+      // User profile update: User CANNOT change their 'role' OR 'approvalStatus' fields
+      allow update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'approvalStatus', 'createdAt', 'updatedAt'])
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.approvalStatus == resource.data.approvalStatus
+        && request.resource.data.displayName is string
+        && request.resource.data.displayName.size() >= 1
+        && request.resource.data.displayName.size() <= 100
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      // User profile cannot be deleted directly by clients
+      allow delete: if false;
+    }
+
+    // --- VENDORS COLLECTION ---
+    // Document ID: {uid}
+    match /vendors/{uid} {
+      // Public vendor profiles are readable by customers/anyone
+      allow read: if true;
+
+      // Only an authenticated user whose profile role is 'vendor' can create a vendor profile
+      allow create: if isOwner(uid)
+        && isVendor()
+        && request.resource.data.keys().hasAll(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
+        && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 20
+        && request.resource.data.category is string && request.resource.data.category.size() >= 1 && request.resource.data.category.size() <= 50
+        && isValidLat(request.resource.data.latitude)
+        && isValidLng(request.resource.data.longitude)
+        && isValidGeohash(request.resource.data.geohash)
+        && request.resource.data.createdAt is timestamp;
+
+      // Vendor can update their profile fields (cannot change createdAt or owner uid)
+      allow update: if isOwner(uid)
+        && isVendor()
+        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
+        && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 20
+        && request.resource.data.category is string && request.resource.data.category.size() >= 1 && request.resource.data.category.size() <= 50
+        && isValidLat(request.resource.data.latitude)
+        && isValidLng(request.resource.data.longitude)
+        && isValidGeohash(request.resource.data.geohash)
+        && request.resource.data.createdAt == resource.data.createdAt;
+
+      // Vendor can delete their profile
+      allow delete: if isOwner(uid) && isVendor();
+    }
+
+    // --- OFFERS COLLECTION ---
+    // Document ID: {offerId}
+    match /offers/{offerId} {
+      // Anyone can read active offers; vendors can read all their own offers
+      allow read: if (resource.data.status == 'active')
+        || (isAuthenticated() && resource.data.vendorId == request.auth.uid);
+
+      // Only an APPROVED vendor can create an offer (Pending vendors blocked)
+      allow create: if isApprovedVendor()
+        && request.resource.data.vendorId == request.auth.uid
+        && request.resource.data.keys().hasAll([
+          'vendorId', 'title', 'description', 'oldPrice', 'newPrice',
+          'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt',
+          'expiryTime', 'status'
+        ])
+        && request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100
+        && request.resource.data.description is string && request.resource.data.description.size() <= 1000
+        && (request.resource.data.oldPrice is int || request.resource.data.oldPrice is float) && request.resource.data.oldPrice > 0.0
+        && (request.resource.data.newPrice is int || request.resource.data.newPrice is float) && request.resource.data.newPrice > 0.0
+        && request.resource.data.newPrice <= request.resource.data.oldPrice
+        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2048
+        && isValidLat(request.resource.data.latitude)
+        && isValidLng(request.resource.data.longitude)
+        && isValidGeohash(request.resource.data.geohash)
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.expiryTime is timestamp
+        && request.resource.data.expiryTime > request.resource.data.createdAt
+        && (request.resource.data.status == 'active' || request.resource.data.status == 'draft');
+
+      // Only approved owner vendor can update their own offer
+      allow update: if isApprovedVendor()
+        && resource.data.vendorId == request.auth.uid
+        && request.resource.data.vendorId == resource.data.vendorId
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100
+        && request.resource.data.description is string && request.resource.data.description.size() <= 1000
+        && (request.resource.data.oldPrice is int || request.resource.data.oldPrice is float) && request.resource.data.oldPrice > 0.0
+        && (request.resource.data.newPrice is int || request.resource.data.newPrice is float) && request.resource.data.newPrice > 0.0
+        && request.resource.data.newPrice <= request.resource.data.oldPrice
+        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2048
+        && isValidLat(request.resource.data.latitude)
+        && isValidLng(request.resource.data.longitude)
+        && isValidGeohash(request.resource.data.geohash)
+        && request.resource.data.expiryTime is timestamp
+        && request.resource.data.status in ['active', 'expired', 'deleted', 'draft'];
+
+      // Only owner vendor can delete their own offer
+      allow delete: if isAuthenticated() && resource.data.vendorId == request.auth.uid;
+    }
+  }
+}

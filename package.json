@@ -1,0 +1,18 @@
+{
+  "name": "sandhai",
+  "version": "1.0.0",
+  "description": "5KM Sandhai Hyperlocal Clearance Marketplace",
+  "main": "index.js",
+  "scripts": {
+    "test": "node --test test/widget_and_model_test.js",
+    "test:rules": "node --test test/rules.test.js",
+    "test:emulators": "NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy= npx -y firebase-tools@latest emulators:exec --only firestore,storage,auth \"node --test test/rules.test.js\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^3.0.0",
+    "firebase": "^10.0.0"
+  }
+}
