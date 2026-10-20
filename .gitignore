@@ -1,0 +1,31 @@
+# Flutter and Dart generated files
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+build/
+coverage/
+
+# Local tools, editor files, and logs
+node_modules/
+.fvm/
+.idea/
+*.iml
+*.log
+.DS_Store
+
+# Local Firebase credentials and environment overrides
+.firebase/
+*-firebase-adminsdk-*.json
+*.jks
+*.keystore
+
+
+# Generated platform packages and symbol output
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+app.*.symbols
+app.*.map.json
+.widget_preview/

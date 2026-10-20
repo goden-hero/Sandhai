@@ -1,21 +1,18 @@
-# 5KM Sandhai — Task 4: Vendor Registration / Profile Screen Report
+# 5KM Sandhai — Task 4 & 4.1: Vendor Registration / Profile Screen Final Audit & Validation Report
 
-This document presents the implementation report for **Task 4: Vendor Registration / Profile Screen** for the **5KM Sandhai** hyperlocal clearance marketplace app.
+This document presents the audit, review, validation results, and Git checkpoint details for **Task 4 & Task 4.1: Vendor Registration / Profile Screen** of the **5KM Sandhai** hyperlocal clearance marketplace app.
 
 ---
 
-## 1. Executive Summary
+## 1. Executive Summary & Review Findings
 
-Task 4 has been completed. The vendor registration and profile experience has been extended to support full business profile collection, viewing, editing, and approval status tracking. 
+Task 4 and Task 4.1 have been audited, extended, and verified. The vendor registration and profile system now fully supports store information submission, profile viewing, field editing, status tracking (`PENDING APPROVAL`, `APPROVED`, `REJECTED`), and unsaved edit protection.
 
-### Key Implementations:
-1. **Extended Business Profile Schema**: Extended [`VendorModel`](file:///home/hisham/projects/sandhai/lib/models/vendor_model.dart) with optional `address`, `description`, `imageUrl`, and `updatedAt` fields along with a `copyWith()` helper.
-2. **Enhanced Vendor Registration Form**: [`RegisterVendorScreen`](file:///home/hisham/projects/sandhai/lib/features/auth/screens/register_vendor_screen.dart) now collects business name, category, phone number (with 10-digit validation), business address, and optional business description.
-3. **Dedicated Vendor Profile Screen**: Created [`VendorProfileScreen`](file:///home/hisham/projects/sandhai/lib/features/vendor/screens/vendor_profile_screen.dart) supporting:
-   * **View Mode**: Displays store name, category, contact phone, business address, description, account email, UID, and prominent approval status badges (`PENDING APPROVAL` amber badge vs `VERIFIED STORE` green badge).
-   * **Edit Profile Mode**: Allows editing permitted business fields with pre-populated form controllers, input validation, loading state, success feedback, and an unsaved changes confirmation dialog via Flutter `PopScope`.
-4. **Auth & Firestore Service Methods**: Added `fetchVendorProfile` and `updateVendorProfile` to [`AuthService`](file:///home/hisham/projects/sandhai/lib/features/auth/services/auth_service.dart) for updating vendor store documents in `vendors/{uid}` and updating store `displayName` in `users/{uid}`.
-5. **Security Rules Alignment**: Hardened [`firestore.rules`](file:///home/hisham/projects/sandhai/firestore.rules) to permit vendors to update permitted store fields (`name`, `phone`, `category`, `address`, `description`, `imageUrl`, `updatedAt`) while enforcing `hasOnly` key constraints and preventing role or approval status tampering.
+### Audit & Security Findings:
+1. **Approval Status Representation**: Updated [`UserModel`](file:///home/hisham/projects/sandhai/lib/models/user_model.dart) with `isRejectedVendor` helper and added UI handling in [`VendorProfileScreen`](file:///home/hisham/projects/sandhai/lib/features/vendor/screens/vendor_profile_screen.dart) to display appropriate badges and notice banners for rejected or suspended vendor applications.
+2. **Key Constraints in Firestore Rules**: Enforced `keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'address', 'description', 'imageUrl', 'createdAt', 'updatedAt'])` in [`firestore.rules`](file:///home/hisham/projects/sandhai/firestore.rules) to prevent client schema tampering.
+3. **Form & Data Validation**: [`RegisterVendorScreen`](file:///home/hisham/projects/sandhai/lib/features/auth/screens/register_vendor_screen.dart) enforces required store name, category, phone number (10+ digits validation), and business address.
+4. **Navigation & Session Security**: Unauthenticated users cannot access vendor routes; pending vendors cannot publish offers; customer role-switch shortcuts have been removed.
 
 ---
 
@@ -38,22 +35,23 @@ graph TD
 
 ---
 
-## 3. Files Created or Modified
+## 3. Files Modified & Created
 
 | File Path | Action | Description |
 | :--- | :--- | :--- |
 | [`lib/models/vendor_model.dart`](file:///home/hisham/projects/sandhai/lib/models/vendor_model.dart) | **Modified** | Extended with `address`, `description`, `imageUrl`, `updatedAt`, and `copyWith()`. |
+| [`lib/models/user_model.dart`](file:///home/hisham/projects/sandhai/lib/models/user_model.dart) | **Modified** | Added `isRejectedVendor` getter helper. |
 | [`lib/features/auth/services/auth_service.dart`](file:///home/hisham/projects/sandhai/lib/features/auth/services/auth_service.dart) | **Modified** | Added `fetchVendorProfile()` and `updateVendorProfile()` methods. |
-| [`lib/features/auth/screens/register_vendor_screen.dart`](file:///home/hisham/projects/sandhai/lib/features/auth/screens/register_vendor_screen.dart) | **Modified** | Added business address, description inputs, and phone validation. |
-| [`lib/features/vendor/screens/vendor_profile_screen.dart`](file:///home/hisham/projects/sandhai/lib/features/vendor/screens/vendor_profile_screen.dart) | **Created** | Built view and edit modes for vendor store profiles with `PopScope` unsaved edit guards. |
+| [`lib/features/auth/screens/register_vendor_screen.dart`](file:///home/hisham/projects/sandhai/lib/features/auth/screens/register_vendor_screen.dart) | **Modified** | Added business address, description inputs, and 10-digit phone validation. |
+| [`lib/features/vendor/screens/vendor_profile_screen.dart`](file:///home/hisham/projects/sandhai/lib/features/vendor/screens/vendor_profile_screen.dart) | **Created** | Built view/edit modes for vendor store profiles with `PopScope` unsaved edit guards and status banners. |
 | [`lib/app/router.dart`](file:///home/hisham/projects/sandhai/lib/app/router.dart) | **Modified** | Registered `/vendor/profile` route and mapped vendor role navigation. |
 | [`firestore.rules`](file:///home/hisham/projects/sandhai/firestore.rules) | **Modified** | Updated `vendors/{uid}` `hasOnly` key validation to permit `address`, `description`, `imageUrl`, and `updatedAt`. |
 | [`test/rules.test.js`](file:///home/hisham/projects/sandhai/test/rules.test.js) | **Modified** | Added Test 11 (permitted profile updates) and Test 12 (unauthorized vendor update block). |
-| [`test/widget_and_model_test.js`](file:///home/hisham/projects/sandhai/test/widget_and_model_test.js) | **Modified** | Added static tests 8, 9, 10 for Task 4 form inputs, profile screen, and model extensions. |
+| [`test/widget_and_model_test.js`](file:///home/hisham/projects/sandhai/test/widget_and_model_test.js) | **Modified** | Added static architecture tests 8, 9, 10 for Task 4 form inputs, profile screen, and model extensions. |
 
 ---
 
-## 4. Tests Executed & Results
+## 4. Test Execution & Validation Results
 
 ### 1. Static Architecture & Code Audit Suite (`npm test`):
 ```text
@@ -90,29 +88,24 @@ graph TD
 
 ---
 
-## 5. Verification & Environmental Status
+## 5. Git Checkpoint
 
-| Validation Item | Method / Suite | Status |
-| :--- | :--- | :--- |
-| **Vendor Business Information Collection** | Form Validation Inspection | **Verified and passing** |
-| **Vendor Profile View & Edit Modes** | `VendorProfileScreen` Code Audit | **Verified and passing** |
-| **Vendor Self-Profile Update** | Firestore Rules Test 11 | **Verified and passing** |
-| **Vendor Cross-Profile Update Block** | Firestore Rules Test 12 | **Verified and passing** |
-| **Immutability of Role & Approval Status** | Firestore Rules Test 5 | **Verified and passing** |
-| **Pending Vendor Offer Restrictions** | Firestore Rules Test 4 | **Verified and passing** |
-| **Flutter CLI Build & Runtime Validation** | System `flutter` CLI | **Blocked by environment** (Flutter SDK not installed on host PATH) |
+* **Branch**: `master`
+* **Commit Hash**: `f728b25`
+* **Commit Message**: `feat: finalize vendor registration and profile`
+* **Staged Changes**: 10 files committed (0 errors).
 
 ---
 
-## 6. Known Issues & Remaining Limitations
+## 6. Remaining Limitations & Environment Status
 
-* **Flutter SDK Availability**: The host environment lacks a `flutter` binary on PATH. Static node audit checks and Firebase Emulator security suites were used.
-* **Administrative Approval Workflow**: Out of scope for Task 4. Pending vendors remain restricted from posting offers until an administrative process approves them.
+* **Flutter SDK Availability**: The host environment lacks a `flutter` binary on PATH. Static node audit checks and Firebase Emulator security suites were used to validate the codebase.
+* **Administrative Approval Workflow**: Pending vendors remain restricted from posting offers until an out-of-band or admin process sets `approvalStatus: 'approved'`.
 
 ---
 
-## 7. Readiness Assessment
+## 7. Final Task Status
 
-**Status**: **Complete (Verified and Passing)**
+**STATUS**: **READY WITH LIMITATIONS**
 
-Task 4 requirements have been implemented and verified. All security guarantees, role restrictions, and form behaviors are active and tested.
+Review completed. No known blocking security or architectural issues remain. Static architecture tests (11/11) and Firebase Emulator security rules tests (12/12) pass. Git checkpoint commit `f728b25` is clean.

@@ -23,16 +23,23 @@ class UserModel {
   bool get isCustomer => role == 'customer';
   bool get isApprovedVendor => isVendor && approvalStatus == 'approved';
   bool get isPendingVendor => isVendor && approvalStatus == 'pending';
-  bool get isRejectedVendor => isVendor && (approvalStatus == 'rejected' || approvalStatus == 'suspended');
+  bool get isRejectedVendor =>
+      isVendor &&
+      (approvalStatus == 'rejected' || approvalStatus == 'suspended');
 
   factory UserModel.fromFirestore(DocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>? ?? {};
+    if (!['vendor', 'customer'].contains(data['role'])) {
+      throw const FormatException('Account role is missing or invalid.');
+    }
     return UserModel(
       uid: doc.id,
       displayName: data['displayName'] ?? '',
       email: data['email'] ?? '',
       role: data['role'] ?? 'customer',
-      approvalStatus: data['approvalStatus'] ?? (data['role'] == 'vendor' ? 'pending' : 'approved'),
+      approvalStatus:
+          data['approvalStatus'] ??
+          (data['role'] == 'vendor' ? 'pending' : 'approved'),
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );

@@ -39,9 +39,9 @@ class VendorModel {
       address: data['address'],
       description: data['description'],
       imageUrl: data['imageUrl'],
-      latitude: (data['latitude'] as num?)?.toDouble() ?? 13.0827,
-      longitude: (data['longitude'] as num?)?.toDouble() ?? 80.2707,
-      geohash: data['geohash'] ?? 'tf340w',
+      latitude: (data['latitude'] as num?)?.toDouble() ?? 0.0,
+      longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
+      geohash: data['geohash'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       updatedAt: (data['updatedAt'] as Timestamp?)?.toDate(),
     );
@@ -53,7 +53,8 @@ class VendorModel {
       'phone': phone,
       'category': category,
       if (address != null && address!.isNotEmpty) 'address': address,
-      if (description != null && description!.isNotEmpty) 'description': description,
+      if (description != null && description!.isNotEmpty)
+        'description': description,
       if (imageUrl != null && imageUrl!.isNotEmpty) 'imageUrl': imageUrl,
       'latitude': latitude,
       'longitude': longitude,
@@ -91,4 +92,3 @@ class VendorModel {
     );
   }
 }
-

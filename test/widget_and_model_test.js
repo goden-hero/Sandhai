@@ -136,10 +136,27 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
       'utf8'
     );
     assert.strictEqual(offerServiceContent.includes('fetchVendorProfile'), true);
-    assert.strictEqual(offerServiceContent.includes('vendorProfile?.latitude'), true);
+    assert.strictEqual(offerServiceContent.includes('vendorProfile.latitude'), true);
     assert.strictEqual(offerServiceContent.includes('uploadedStorageRef.delete()'), true);
   });
+
+  await t.test('15. GeohashUtils provides 6-character base32 encoding, coordinate bounds validation, and OfferService integration', () => {
+    const geohashUtilsContent = fs.readFileSync(
+      path.join(__dirname, '..', 'lib', 'core', 'utils', 'geohash_utils.dart'),
+      'utf8'
+    );
+    const offerServiceContent = fs.readFileSync(
+      path.join(__dirname, '..', 'lib', 'features', 'vendor', 'services', 'offer_service.dart'),
+      'utf8'
+    );
+    assert.strictEqual(geohashUtilsContent.includes('static const int defaultPrecision = 6;'), true);
+    assert.strictEqual(geohashUtilsContent.includes('_base32Chars'), true);
+    assert.strictEqual(geohashUtilsContent.includes('isValidLocation'), true);
+    assert.strictEqual(offerServiceContent.includes('GeohashUtils.isValidLocation'), true);
+    assert.strictEqual(offerServiceContent.includes('GeohashUtils.encode'), true);
+  });
 });
+
 
 
 

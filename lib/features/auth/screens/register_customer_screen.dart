@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../../app/router.dart';
+import '../../../core/errors/app_failure.dart';
 import '../services/auth_service.dart';
 
 class RegisterCustomerScreen extends StatefulWidget {
@@ -36,27 +38,15 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
     });
 
     try {
-      final userModel = await AuthService.instance.registerCustomer(
+      await AuthService.instance.registerCustomer(
         email: _emailController.text,
         password: _passwordController.text,
         displayName: _nameController.text,
       );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Customer account created! Welcome, ${userModel.displayName}'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = errorMessage(e);
           _isLoading = false;
         });
       }
@@ -66,15 +56,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Customer Registration'),
-      ),
+      appBar: AppBar(title: const Text('Customer Registration')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAlignment: CrossAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Role Badge Header
               Row(
@@ -82,24 +70,33 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                      color: Theme.of(context).colorScheme.primary
+                          .withValues(alpha: 0.12),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.shopping_bag_outlined, color: Theme.of(context).colorScheme.primary),
+                    child: Icon(
+                      Icons.shopping_bag_outlined,
+                      color: Theme.of(context).colorScheme.primary,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  const Column(
-                    crossAlignment: CrossAlignment.start,
-                    children: [
-                      Text(
-                        'Join as Customer',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Discover local 5 KM clearance deals',
-                        style: TextStyle(fontSize: 13, color: Colors.grey),
-                      ),
-                    ],
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Join as Customer',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Discover local 5 KM clearance deals',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -123,9 +120,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
               ],
 
               // Full Name Field
-              const Text('Full Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Full Name',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _nameController,
                 decoration: const InputDecoration(
                   hintText: 'e.g. Ananya Kumar',
@@ -141,9 +142,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
               const SizedBox(height: 16),
 
               // Email Field
-              const Text('Email Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Email Address',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
@@ -163,9 +168,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
               const SizedBox(height: 16),
 
               // Password Field
-              const Text('Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
@@ -185,9 +194,13 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
               const SizedBox(height: 16),
 
               // Confirm Password Field
-              const Text('Confirm Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Confirm Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _confirmPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(
@@ -212,7 +225,10 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
                         )
                       : const Text('Create Customer Account'),
                 ),
@@ -220,10 +236,14 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
               const SizedBox(height: 20),
 
               // Nav to Sign In
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('Already have an account?', style: TextStyle(color: Colors.grey.shade600)),
+                  Text(
+                    'Already have an account?',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.pushReplacementNamed(context, AppRoutes.signIn);

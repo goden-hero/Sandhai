@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../../app/router.dart';
+import '../../../core/errors/app_failure.dart';
 import '../services/auth_service.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -32,31 +34,14 @@ class _SignInScreenState extends State<SignInScreen> {
     });
 
     try {
-      final userModel = await AuthService.instance.signInWithEmailAndPassword(
+      await AuthService.instance.signInWithEmailAndPassword(
         email: _emailController.text,
         password: _passwordController.text,
       );
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Welcome back, ${userModel.displayName}!'),
-          backgroundColor: Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
-      );
-
-      // Route according to user's profile role from Firestore (NOT from login input)
-      if (userModel.role == 'vendor') {
-        Navigator.pushNamedAndRemoveUntil(context, AppRoutes.vendorDashboard, (route) => false);
-      } else {
-        Navigator.pushNamedAndRemoveUntil(context, AppRoutes.customerHome, (route) => false);
-      }
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = errorMessage(e);
           _isLoading = false;
         });
       }
@@ -66,15 +51,13 @@ class _SignInScreenState extends State<SignInScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Sign In'),
-      ),
+      appBar: AppBar(title: const Text('Sign In')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAlignment: CrossAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 12),
               // Header Icon & Title
@@ -108,12 +91,19 @@ class _SignInScreenState extends State<SignInScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade800, size: 20),
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.red.shade800,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: TextStyle(color: Colors.red.shade800, fontSize: 13),
+                          style: TextStyle(
+                            color: Colors.red.shade800,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -123,9 +113,13 @@ class _SignInScreenState extends State<SignInScreen> {
               ],
 
               // Email Field
-              const Text('Email Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Email Address',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
@@ -146,9 +140,13 @@ class _SignInScreenState extends State<SignInScreen> {
               const SizedBox(height: 18),
 
               // Password Field
-              const Text('Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
@@ -173,7 +171,10 @@ class _SignInScreenState extends State<SignInScreen> {
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
                         )
                       : const Text('Sign In'),
                 ),
@@ -181,13 +182,20 @@ class _SignInScreenState extends State<SignInScreen> {
               const SizedBox(height: 24),
 
               // Links to Registration
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text("Don't have an account?", style: TextStyle(color: Colors.grey.shade600)),
+                  Text(
+                    "Don't have an account?",
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
                   TextButton(
                     onPressed: () {
-                      Navigator.pushReplacementNamed(context, AppRoutes.welcome);
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.welcome,
+                      );
                     },
                     child: const Text('Register Here'),
                   ),

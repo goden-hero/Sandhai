@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../app/router.dart';
-import '../../../mock_data/mock_data.dart';
+import '../../../core/errors/app_failure.dart';
+import '../../../core/constants/offer_categories.dart';
 import '../services/auth_service.dart';
 
 class RegisterVendorScreen extends StatefulWidget {
@@ -44,41 +46,19 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
     });
 
     try {
-      final userModel = await AuthService.instance.registerVendor(
+      await AuthService.instance.registerVendor(
         email: _emailController.text,
         password: _passwordController.text,
         storeName: _storeNameController.text,
         phone: _phoneController.text,
         category: _selectedCategory,
+        address: _addressController.text,
+        description: _descriptionController.text,
       );
-
-      // Save additional vendor details (address & description)
-      if (userModel.uid.isNotEmpty) {
-        await AuthService.instance.updateVendorProfile(
-          uid: userModel.uid,
-          name: _storeNameController.text,
-          phone: _phoneController.text,
-          category: _selectedCategory,
-          address: _addressController.text.trim(),
-          description: _descriptionController.text.trim(),
-        );
-      }
-
-      if (!mounted) return;
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Vendor registration submitted! Store Status: PENDING APPROVAL.'),
-          backgroundColor: Colors.orange.shade800,
-          duration: const Duration(seconds: 3),
-        ),
-      );
-
-      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.vendorDashboard, (route) => false);
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString();
+          _errorMessage = errorMessage(e);
           _isLoading = false;
         });
       }
@@ -87,18 +67,18 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final availableCategories = MockData.categories.where((c) => c != 'All').toList();
+    final availableCategories = OfferCategories.values
+        .where((c) => c != 'All')
+        .toList();
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Vendor Registration'),
-      ),
+      appBar: AppBar(title: const Text('Vendor Registration')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAlignment: CrossAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header
               Row(
@@ -106,24 +86,33 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.secondary.withOpacity(0.15),
+                      color: Theme.of(context).colorScheme.secondary
+                          .withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
-                    child: Icon(Icons.storefront_outlined, color: Theme.of(context).colorScheme.secondary),
+                    child: Icon(
+                      Icons.storefront_outlined,
+                      color: Theme.of(context).colorScheme.secondary,
+                    ),
                   ),
                   const SizedBox(width: 12),
-                  const Column(
-                    crossAlignment: CrossAlignment.start,
-                    children: [
-                      Text(
-                        'Join as Vendor',
-                        style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        'Direct Registration for Clearance Sellers',
-                        style: TextStyle(fontSize: 13, color: Colors.grey),
-                      ),
-                    ],
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Join as Vendor',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          'Direct Registration for Clearance Sellers',
+                          style: TextStyle(fontSize: 13, color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -139,12 +128,20 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.info_outline, color: Colors.amber.shade900, size: 20),
+                    Icon(
+                      Icons.info_outline,
+                      color: Colors.amber.shade900,
+                      size: 20,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         'Vendor Approval Policy: Newly registered vendors start with PENDING status. Offer publishing will be enabled upon store verification.',
-                        style: TextStyle(color: Colors.amber.shade900, fontSize: 12, fontWeight: FontWeight.w500),
+                        style: TextStyle(
+                          color: Colors.amber.shade900,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                   ],
@@ -170,9 +167,13 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               ],
 
               // Store Name
-              const Text('Store / Business Name *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Store / Business Name *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _storeNameController,
                 decoration: const InputDecoration(
                   hintText: 'e.g. Green Valley Organics',
@@ -188,13 +189,22 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Business Category Dropdown
-              const Text('Business Category *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Business Category *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: availableCategories.contains(_selectedCategory) ? _selectedCategory : availableCategories.first,
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.category_outlined)),
+                initialValue: availableCategories.contains(_selectedCategory)
+                    ? _selectedCategory
+                    : availableCategories.first,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.category_outlined),
+                ),
                 items: availableCategories
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                    .map(
+                      (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                    )
                     .toList(),
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedCategory = val);
@@ -203,9 +213,13 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Phone Number Field
-              const Text('Phone Number *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Phone Number *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _phoneController,
                 keyboardType: TextInputType.phone,
                 decoration: const InputDecoration(
@@ -226,9 +240,13 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Business Address Field
-              const Text('Business Address *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Business Address *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _addressController,
                 decoration: const InputDecoration(
                   hintText: 'e.g. 42 Usaman Road, T. Nagar, Chennai',
@@ -244,22 +262,31 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Business Description Field
-              const Text('Business Description (Optional)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Business Description (Optional)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _descriptionController,
                 maxLines: 2,
                 decoration: const InputDecoration(
-                  hintText: 'Briefly describe your products & clearance deals...',
+                  hintText:
+                      'Briefly describe your products & clearance deals...',
                   prefixIcon: Icon(Icons.description_outlined),
                 ),
               ),
               const SizedBox(height: 16),
 
               // Email Field
-              const Text('Email Address', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Email Address',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 decoration: const InputDecoration(
@@ -279,9 +306,13 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Password Field
-              const Text('Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
@@ -301,9 +332,13 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 16),
 
               // Confirm Password Field
-              const Text('Confirm Password', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Confirm Password',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isLoading,
                 controller: _confirmPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(
@@ -331,7 +366,10 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
                       ? const SizedBox(
                           width: 24,
                           height: 24,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.5),
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2.5,
+                          ),
                         )
                       : const Text('Submit Vendor Registration'),
                 ),
@@ -339,10 +377,14 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               const SizedBox(height: 20),
 
               // Sign In Link
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Text('Already have an account?', style: TextStyle(color: Colors.grey.shade600)),
+                  Text(
+                    'Already have an account?',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
                   TextButton(
                     onPressed: () {
                       Navigator.pushReplacementNamed(context, AppRoutes.signIn);

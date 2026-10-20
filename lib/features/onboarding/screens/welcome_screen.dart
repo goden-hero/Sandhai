@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../../../app/router.dart';
+import '../../../app/config.dart';
 
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
@@ -11,7 +13,7 @@ class WelcomeScreen extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
           child: Column(
-            crossAlignment: CrossAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const Spacer(),
               // App Branding Hero Section
@@ -20,7 +22,8 @@ class WelcomeScreen extends StatelessWidget {
                   width: 100,
                   height: 100,
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                    color: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: 0.12),
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
@@ -54,10 +57,7 @@ class WelcomeScreen extends StatelessWidget {
               Text(
                 'Discover urgent local deals within 5 KM or sell clearance inventory instantly.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 14,
-                  color: Colors.grey.shade500,
-                ),
+                style: TextStyle(fontSize: 14, color: Colors.grey.shade500),
               ),
               const Spacer(),
 
@@ -86,8 +86,9 @@ class WelcomeScreen extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Sign In Option
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   Text(
                     'Already have an account?',
@@ -99,7 +100,10 @@ class WelcomeScreen extends StatelessWidget {
                     },
                     child: const Text(
                       'Sign In',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
                     ),
                   ),
                 ],
@@ -108,7 +112,10 @@ class WelcomeScreen extends StatelessWidget {
 
               // Task 3 Authentication Info Banner
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
                 decoration: BoxDecoration(
                   color: Colors.blue.shade50,
                   borderRadius: BorderRadius.circular(10),
@@ -116,11 +123,19 @@ class WelcomeScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.verified_user_outlined, size: 18, color: Colors.blue.shade900),
+                    Icon(
+                      Icons.verified_user_outlined,
+                      size: 18,
+                      color: Colors.blue.shade900,
+                    ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
-                        'Firebase Auth Active — Direct Customer & Vendor registration creates secure Firebase Auth accounts.',
+                        AppConfig.current.isDemo
+                            ? 'Demo mode — explore with sample data. Accounts stay on this device until restart.'
+                            : AppConfig.current.mode == AppMode.emulator
+                            ? 'Local development — accounts use the Firebase emulators.'
+                            : 'Create a customer or vendor account to continue.',
                         style: TextStyle(
                           fontSize: 12,
                           color: Colors.blue.shade900,
@@ -164,10 +179,10 @@ class _RoleCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: color.withOpacity(0.3), width: 1.5),
+          border: Border.all(color: color.withValues(alpha: 0.3), width: 1.5),
           boxShadow: [
             BoxShadow(
-              color: color.withOpacity(0.06),
+              color: color.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, 4),
             ),
@@ -178,7 +193,7 @@ class _RoleCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.12),
+                color: color.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 28),
@@ -186,7 +201,7 @@ class _RoleCard extends StatelessWidget {
             const SizedBox(width: 16),
             Expanded(
               child: Column(
-                crossAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
@@ -198,15 +213,16 @@ class _RoleCard extends StatelessWidget {
                   const SizedBox(height: 4),
                   Text(
                     subtitle,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios, color: Colors.grey.shade400, size: 16),
+            Icon(
+              Icons.arrow_forward_ios,
+              color: Colors.grey.shade400,
+              size: 16,
+            ),
           ],
         ),
       ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../features/onboarding/screens/welcome_screen.dart';
+
+import '../features/auth/screens/session_gate.dart';
 import '../features/auth/screens/sign_in_screen.dart';
 import '../features/auth/screens/register_customer_screen.dart';
 import '../features/auth/screens/register_vendor_screen.dart';
@@ -26,38 +27,60 @@ class AppRoutes {
   }) {
     switch (settings.name) {
       case welcome:
-        return MaterialPageRoute(builder: (_) => const WelcomeScreen());
+        return MaterialPageRoute(builder: (_) => const SessionGate());
       case signIn:
         return MaterialPageRoute(builder: (_) => const SignInScreen());
       case registerCustomer:
-        return MaterialPageRoute(builder: (_) => const RegisterCustomerScreen());
+        return MaterialPageRoute(
+          builder: (_) => const RegisterCustomerScreen(),
+        );
       case registerVendor:
         return MaterialPageRoute(builder: (_) => const RegisterVendorScreen());
       case customerHome:
-        return MaterialPageRoute(builder: (_) => const CustomerHomeScreen());
+        return MaterialPageRoute(
+          builder: (_) => const SessionGuard(child: CustomerHomeScreen()),
+        );
       case vendorDashboard:
-        return MaterialPageRoute(builder: (_) => const VendorDashboardScreen());
+        return MaterialPageRoute(
+          builder: (_) => const SessionGuard(
+            child: VendorDashboardScreen(),
+            vendorOnly: true,
+          ),
+        );
       case createOffer:
-        return MaterialPageRoute(builder: (_) => const CreateOfferScreen());
+        return MaterialPageRoute(
+          builder: (_) =>
+              const SessionGuard(child: CreateOfferScreen(), vendorOnly: true),
+        );
       case vendorProfile:
-        return MaterialPageRoute(builder: (_) => const VendorProfileScreen());
+        return MaterialPageRoute(
+          builder: (_) => const SessionGuard(
+            child: VendorProfileScreen(),
+            vendorOnly: true,
+          ),
+        );
       case profile:
         final role = settings.arguments as String? ?? 'customer';
         if (role == 'vendor') {
-          return MaterialPageRoute(builder: (_) => const VendorProfileScreen());
+          return MaterialPageRoute(
+            builder: (_) => const SessionGuard(
+              child: VendorProfileScreen(),
+              vendorOnly: true,
+            ),
+          );
         }
         return MaterialPageRoute(
-          builder: (_) => ProfileScreen(
-            userRole: role,
-            isFirebaseConnected: isFirebaseConnected,
+          builder: (_) => SessionGuard(
+            child: ProfileScreen(
+              userRole: role,
+              isFirebaseConnected: isFirebaseConnected,
+            ),
           ),
         );
       default:
         return MaterialPageRoute(
           builder: (_) => Scaffold(
-            body: Center(
-              child: Text('No route defined for ${settings.name}'),
-            ),
+            body: Center(child: Text('No route defined for ${settings.name}')),
           ),
         );
     }

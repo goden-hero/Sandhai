@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+
 import '../../../app/router.dart';
+import '../../../app/config.dart';
+import '../../../core/constants/offer_categories.dart';
 import '../../../mock_data/mock_data.dart';
 import '../../../models/offer_model.dart';
 import '../widgets/offer_card.dart';
@@ -26,7 +29,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
 
   void _loadOffers() {
     setState(() {
-      _offers = MockData.getMockOffers();
+      _offers = AppConfig.current.isDemo ? MockData.getMockOffers() : [];
     });
   }
 
@@ -35,12 +38,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     await Future.delayed(const Duration(milliseconds: 600));
     setState(() {
       _isLoading = false;
-      _offers = MockData.getMockOffers();
+      _offers = AppConfig.current.isDemo ? MockData.getMockOffers() : [];
     });
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Mock clearance offers refreshed!'),
+        SnackBar(
+          content: Text(
+            AppConfig.current.isDemo
+                ? 'Demo offers refreshed.'
+                : 'Nearby discovery will be added in a later phase.',
+          ),
           duration: Duration(seconds: 1),
         ),
       );
@@ -51,7 +58,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     if (_showEmptyState) return [];
     return _offers.where((offer) {
       // 1. Text Search Filter
-      final matchesQuery = _searchQuery.isEmpty ||
+      final matchesQuery =
+          _searchQuery.isEmpty ||
           offer.title.toLowerCase().contains(_searchQuery.toLowerCase()) ||
           offer.description.toLowerCase().contains(_searchQuery.toLowerCase());
 
@@ -64,16 +72,22 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       final titleLower = offer.title.toLowerCase();
       final descLower = offer.description.toLowerCase();
 
-      if (catLower.contains('groceries') && (titleLower.contains('rice') || descLower.contains('rice'))) {
+      if (catLower.contains('groceries') &&
+          (titleLower.contains('rice') || descLower.contains('rice'))) {
         return true;
       }
-      if (catLower.contains('produce') && (titleLower.contains('mango') || titleLower.contains('fruit'))) {
+      if (catLower.contains('produce') &&
+          (titleLower.contains('mango') || titleLower.contains('fruit'))) {
         return true;
       }
-      if (catLower.contains('bakery') && (titleLower.contains('bread') || titleLower.contains('pastr') || titleLower.contains('milk'))) {
+      if (catLower.contains('bakery') &&
+          (titleLower.contains('bread') ||
+              titleLower.contains('pastr') ||
+              titleLower.contains('milk'))) {
         return true;
       }
-      if (catLower.contains('snacks') && (titleLower.contains('snack') || descLower.contains('beverage'))) {
+      if (catLower.contains('snacks') &&
+          (titleLower.contains('snack') || descLower.contains('beverage'))) {
         return true;
       }
 
@@ -86,7 +100,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Column(
-          crossAxisAlignment: CrossAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Row(
@@ -102,9 +116,13 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).colorScheme.primary.withOpacity(0.12),
+                    color: Theme.of(context).colorScheme.primary
+                        .withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: const Text(
@@ -120,7 +138,9 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 Icon(Icons.location_on, size: 12, color: Colors.grey.shade600),
                 const SizedBox(width: 4),
                 Text(
-                  'T. Nagar, Chennai (Mock 5 KM)',
+                  AppConfig.current.isDemo
+                      ? 'T. Nagar, Chennai (Mock 5 KM)'
+                      : 'Nearby discovery is not connected yet',
                   style: TextStyle(
                     fontSize: 11,
                     color: Colors.grey.shade600,
@@ -136,7 +156,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             icon: const Icon(Icons.person_outline),
             tooltip: 'Profile & Settings',
             onPressed: () {
-              Navigator.pushNamed(context, AppRoutes.profile, arguments: 'customer');
+              Navigator.pushNamed(
+                context,
+                AppRoutes.profile,
+                arguments: 'customer',
+              );
             },
           ),
         ],
@@ -161,7 +185,8 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                           ? IconButton(
                               icon: const Icon(Icons.clear, size: 18),
                               tooltip: 'Clear Search',
-                              onPressed: () => setState(() => _searchQuery = ''),
+                              onPressed: () =>
+                                  setState(() => _searchQuery = ''),
                             )
                           : null,
                     ),
@@ -172,15 +197,16 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                     height: 38,
                     child: ListView.separated(
                       scrollDirection: Axis.horizontal,
-                      itemCount: MockData.categories.length,
+                      itemCount: OfferCategories.values.length,
                       separatorBuilder: (_, __) => const SizedBox(width: 8),
                       itemBuilder: (context, index) {
-                        final cat = MockData.categories[index];
+                        final cat = OfferCategories.values[index];
                         final isSelected = cat == _selectedCategory;
                         return ChoiceChip(
                           label: Text(cat),
                           selected: isSelected,
-                          onSelected: (_) => setState(() => _selectedCategory = cat),
+                          onSelected: (_) =>
+                              setState(() => _selectedCategory = cat),
                         );
                       },
                     ),
@@ -190,39 +216,50 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             ),
 
             // Demo State Toggle Bar (allows testing Empty / Normal states)
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.orange.shade50,
-              child: Row(
-                children: [
-                  Text(
-                    '${_filteredOffers.length} Deals Nearby',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                  const Spacer(),
-                  const Text('Simulate Empty:', style: TextStyle(fontSize: 11, color: Colors.grey)),
-                  Switch(
-                    value: _showEmptyState,
-                    activeColor: Theme.of(context).colorScheme.primary,
-                    onChanged: (val) => setState(() => _showEmptyState = val),
-                  ),
-                ],
+            if (AppConfig.current.isDemo)
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                color: Colors.orange.shade50,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${_filteredOffers.length} Deals Nearby',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                    const Text(
+                      'Simulate Empty:',
+                      style: TextStyle(fontSize: 11, color: Colors.grey),
+                    ),
+                    Switch(
+                      value: _showEmptyState,
+                      activeThumbColor: Theme.of(context).colorScheme.primary,
+                      onChanged: (val) => setState(() => _showEmptyState = val),
+                    ),
+                  ],
+                ),
               ),
-            ),
 
             // Offers List / Loading / Empty State
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
                   : _filteredOffers.isEmpty
-                      ? _buildEmptyState()
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: _filteredOffers.length,
-                          itemBuilder: (context, index) {
-                            return OfferCard(offer: _filteredOffers[index]);
-                          },
-                        ),
+                  ? _buildEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _filteredOffers.length,
+                      itemBuilder: (context, index) {
+                        return OfferCard(offer: _filteredOffers[index]);
+                      },
+                    ),
             ),
           ],
         ),
@@ -232,7 +269,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         selectedItemColor: Theme.of(context).colorScheme.primary,
         onTap: (index) {
           if (index == 1) {
-            Navigator.pushNamed(context, AppRoutes.profile, arguments: 'customer');
+            Navigator.pushNamed(
+              context,
+              AppRoutes.profile,
+              arguments: 'customer',
+            );
           }
         },
         items: const [
@@ -240,10 +281,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
             icon: Icon(Icons.local_offer),
             label: 'Deals',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
         ],
       ),
     );
@@ -256,7 +294,11 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off_outlined, size: 64, color: Colors.grey.shade400),
+            Icon(
+              Icons.search_off_outlined,
+              size: 64,
+              color: Colors.grey.shade400,
+            ),
             const SizedBox(height: 16),
             const Text(
               'No clearance offers found',

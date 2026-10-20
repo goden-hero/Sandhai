@@ -91,7 +91,7 @@ service cloud.firestore {
 
       // Only an authenticated user whose profile role is 'vendor' can create a vendor profile
       allow create: if isOwner(uid)
-        && isVendor()
+        && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == 'vendor'
         && request.resource.data.keys().hasAll(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt'])
         && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'address', 'description', 'imageUrl', 'createdAt', 'updatedAt'])
         && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
@@ -121,6 +121,9 @@ service cloud.firestore {
     // --- OFFERS COLLECTION ---
     // Document ID: {offerId}
     match /offers/{offerId} {
+      // Needed for online idempotent create transactions to read a missing ID.
+      allow get: if isApprovedVendor()
+        && !exists(/databases/$(database)/documents/offers/$(offerId));
       // Anyone can read active offers; vendors can read all their own offers
       allow read: if (resource.data.status == 'active')
         || (isAuthenticated() && resource.data.vendorId == request.auth.uid);
@@ -128,6 +131,7 @@ service cloud.firestore {
       // Only an APPROVED vendor can create an offer (Pending vendors blocked)
       allow create: if isApprovedVendor()
         && request.resource.data.vendorId == request.auth.uid
+        && request.resource.data.keys().hasOnly(['vendorId', 'title', 'description', 'oldPrice', 'newPrice', 'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt', 'expiryTime', 'status'])
         && request.resource.data.keys().hasAll([
           'vendorId', 'title', 'description', 'oldPrice', 'newPrice',
           'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt',
@@ -151,6 +155,7 @@ service cloud.firestore {
       allow update: if isApprovedVendor()
         && resource.data.vendorId == request.auth.uid
         && request.resource.data.vendorId == resource.data.vendorId
+        && request.resource.data.keys().hasOnly(['vendorId', 'title', 'description', 'oldPrice', 'newPrice', 'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt', 'expiryTime', 'status'])
         && request.resource.data.createdAt == resource.data.createdAt
         && request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100
         && request.resource.data.description is string && request.resource.data.description.size() <= 1000

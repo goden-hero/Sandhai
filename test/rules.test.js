@@ -243,7 +243,7 @@ test('7. Invalid offer data is rejected', async () => {
   const now = new Date();
   const expiry = new Date(now.getTime() + 3600000);
 
-  // Overpriced offer (newPrice > oldPrice)
+  // 7a. Overpriced offer (newPrice > oldPrice)
   await assertFails(
     vendorDb.collection('offers').add({
       vendorId: 'approvedVendor',
@@ -255,6 +255,60 @@ test('7. Invalid offer data is rejected', async () => {
       latitude: 13.0827,
       longitude: 80.2707,
       geohash: 'tf340w',
+      createdAt: now,
+      expiryTime: expiry,
+      status: 'active',
+    })
+  );
+
+  // 7b. Out-of-bounds latitude (> 90.0)
+  await assertFails(
+    vendorDb.collection('offers').add({
+      vendorId: 'approvedVendor',
+      title: 'Invalid Lat Offer',
+      description: 'Latitude 100.0',
+      oldPrice: 100.0,
+      newPrice: 50.0,
+      imageUrl: 'https://example.com/img.jpg',
+      latitude: 100.0,
+      longitude: 80.2707,
+      geohash: 'tf340w',
+      createdAt: now,
+      expiryTime: expiry,
+      status: 'active',
+    })
+  );
+
+  // 7c. Out-of-bounds longitude (> 180.0)
+  await assertFails(
+    vendorDb.collection('offers').add({
+      vendorId: 'approvedVendor',
+      title: 'Invalid Lng Offer',
+      description: 'Longitude 200.0',
+      oldPrice: 100.0,
+      newPrice: 50.0,
+      imageUrl: 'https://example.com/img.jpg',
+      latitude: 13.0827,
+      longitude: 200.0,
+      geohash: 'tf340w',
+      createdAt: now,
+      expiryTime: expiry,
+      status: 'active',
+    })
+  );
+
+  // 7d. Invalid geohash format (empty string)
+  await assertFails(
+    vendorDb.collection('offers').add({
+      vendorId: 'approvedVendor',
+      title: 'Invalid Geohash Offer',
+      description: 'Empty geohash',
+      oldPrice: 100.0,
+      newPrice: 50.0,
+      imageUrl: 'https://example.com/img.jpg',
+      latitude: 13.0827,
+      longitude: 80.2707,
+      geohash: '',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',

@@ -1,8 +1,11 @@
 import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
+
 import '../../../app/router.dart';
-import '../../../mock_data/mock_data.dart';
+import '../../../core/constants/offer_categories.dart';
 import '../../../models/user_model.dart';
+import '../../../core/errors/app_failure.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/offer_service.dart';
 
@@ -30,20 +33,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   String? _selectedImageName;
   bool _hasSelectedImage = false;
 
-  late UserModel _currentVendorUser;
-
+  UserModel get _currentVendorUser => AuthService.instance.profile!;
+  late final String _offerId;
+  String _progress = 'Saving… waiting for server confirmation';
   @override
   void initState() {
     super.initState();
-    _currentVendorUser = AuthService.instance.demoCurrentUser ??
-        UserModel(
-          uid: MockData.sampleVendor.uid,
-          displayName: MockData.sampleVendor.name,
-          email: 'vendor@greenvalley.com',
-          role: 'vendor',
-          approvalStatus: 'pending',
-          createdAt: DateTime.now(),
-        );
+    _offerId = OfferService.instance.newOfferId();
   }
 
   @override
@@ -73,9 +69,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   void _pickSampleImage() {
+    if (!AuthService.instance.isDemo) return;
     setState(() {
-      _selectedImageBytes = Uint8List.fromList(List.generate(1024, (i) => i % 256));
-      _selectedImageName = 'clearance_item_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      _selectedImageBytes = Uint8List.fromList(
+        List.generate(1024, (i) => i % 256),
+      );
+      _selectedImageName =
+          'clearance_item_${DateTime.now().millisecondsSinceEpoch}.jpg';
       _hasSelectedImage = true;
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -97,12 +97,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   Future<void> _handlePublishOffer() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (_currentVendorUser.isPendingVendor || _currentVendorUser.isRejectedVendor) {
+    if (_currentVendorUser.isPendingVendor ||
+        _currentVendorUser.isRejectedVendor) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(_currentVendorUser.isPendingVendor
-              ? '⚠️ Store Approval Pending: You cannot publish offers until store verification.'
-              : '🛑 Account Suspended: Offer publishing is disabled.'),
+          content: Text(
+            _currentVendorUser.isPendingVendor
+                ? '⚠️ Store Approval Pending: You cannot publish offers until store verification.'
+                : '🛑 Account Suspended: Offer publishing is disabled.',
+          ),
           backgroundColor: Colors.orange.shade800,
         ),
       );
@@ -120,6 +123,10 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       final durationHours = _parseDurationHours(_selectedDuration);
 
       await OfferService.instance.createOffer(
+        offerId: _offerId,
+        onProgress: (message) {
+          if (mounted) setState(() => _progress = message);
+        },
         title: _titleController.text,
         description: _descController.text,
         oldPrice: oldPrice,
@@ -140,11 +147,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         ),
       );
 
-      Navigator.pushNamedAndRemoveUntil(context, AppRoutes.vendorDashboard, (route) => false);
+      Navigator.pushNamedAndRemoveUntil(
+        context,
+        AppRoutes.vendorDashboard,
+        (route) => false,
+      );
     } catch (e) {
       if (mounted) {
         setState(() {
-          _errorMessage = e.toString().replaceAll('Exception: ', '');
+          _errorMessage = errorMessage(e);
           _isSubmitting = false;
         });
       }
@@ -152,50 +163,65 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    final availableCategories = MockData.categories.where((c) => c != 'All').toList();
+  Widget build(BuildContext context) => ListenableBuilder(
+    listenable: AuthService.instance,
+    builder: (context, _) => _buildForm(context),
+  );
+  Widget _buildForm(BuildContext context) {
+    final availableCategories = OfferCategories.values
+        .where((c) => c != 'All')
+        .toList();
     final isPending = _currentVendorUser.isPendingVendor;
-    final isRejected = _currentVendorUser.isRejectedVendor;
     final isApproved = _currentVendorUser.isApprovedVendor;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Post Clearance Offer'),
-      ),
+      appBar: AppBar(title: const Text('Post Clearance Offer')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20.0),
         child: Form(
           key: _formKey,
           child: Column(
-            crossAlignment: CrossAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Pending or Rejected Vendor Guard Banner
               if (!isApproved) ...[
                 Container(
                   padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: isPending ? Colors.amber.shade50 : Colors.red.shade50,
+                    color: isPending
+                        ? Colors.amber.shade50
+                        : Colors.red.shade50,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isPending ? Colors.amber.shade300 : Colors.red.shade300),
+                    border: Border.all(
+                      color: isPending
+                          ? Colors.amber.shade300
+                          : Colors.red.shade300,
+                    ),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         isPending ? Icons.hourglass_top_outlined : Icons.block,
-                        color: isPending ? Colors.amber.shade900 : Colors.red.shade900,
+                        color: isPending
+                            ? Colors.amber.shade900
+                            : Colors.red.shade900,
                         size: 24,
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
-                          crossAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              isPending ? 'Store Approval Required' : 'Account Suspended',
+                              isPending
+                                  ? 'Store Approval Required'
+                                  : 'Account Suspended',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 14,
-                                color: isPending ? Colors.amber.shade900 : Colors.red.shade900,
+                                color: isPending
+                                    ? Colors.amber.shade900
+                                    : Colors.red.shade900,
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -205,7 +231,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                                   : 'Offer publishing is disabled for suspended or rejected vendor accounts.',
                               style: TextStyle(
                                 fontSize: 12,
-                                color: isPending ? Colors.amber.shade900 : Colors.red.shade900,
+                                color: isPending
+                                    ? Colors.amber.shade900
+                                    : Colors.red.shade900,
                               ),
                             ),
                           ],
@@ -228,12 +256,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: Colors.red.shade900, size: 20),
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.red.shade900,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _errorMessage!,
-                          style: TextStyle(color: Colors.red.shade900, fontSize: 13),
+                          style: TextStyle(
+                            color: Colors.red.shade900,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                     ],
@@ -243,9 +278,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               ],
 
               // Offer Title Field
-              const Text('Offer Title *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Offer Title *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isSubmitting,
                 controller: _titleController,
                 maxLength: 100,
                 decoration: const InputDecoration(
@@ -265,9 +304,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               const SizedBox(height: 12),
 
               // Description Field
-              const Text('Offer Description *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Offer Description *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               TextFormField(
+                enabled: !_isSubmitting,
                 controller: _descController,
                 maxLines: 3,
                 maxLength: 1000,
@@ -285,13 +328,22 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               const SizedBox(height: 12),
 
               // Category Selector Dropdown
-              const Text('Category *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Category *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: availableCategories.contains(_selectedCategory) ? _selectedCategory : availableCategories.first,
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.category)),
+                initialValue: availableCategories.contains(_selectedCategory)
+                    ? _selectedCategory
+                    : availableCategories.first,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.category),
+                ),
                 items: availableCategories
-                    .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                    .map(
+                      (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                    )
                     .toList(),
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedCategory = val);
@@ -301,17 +353,26 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
               // Price Row (Original vs Clearance Price)
               Row(
-                crossAlignment: CrossAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
                     child: Column(
-                      crossAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Original Price (₹) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const Text(
+                          'Original Price (₹) *',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
                         const SizedBox(height: 6),
                         TextFormField(
+                enabled: !_isSubmitting,
                           controller: _oldPriceController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           decoration: const InputDecoration(hintText: '160'),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -330,13 +391,22 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Column(
-                      crossAlignment: CrossAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text('Clearance Price (₹) *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                        const Text(
+                          'Clearance Price (₹) *',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 14,
+                          ),
+                        ),
                         const SizedBox(height: 6),
                         TextFormField(
+                enabled: !_isSubmitting,
                           controller: _newPriceController,
-                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
                           decoration: const InputDecoration(hintText: '70'),
                           validator: (value) {
                             if (value == null || value.trim().isEmpty) {
@@ -346,7 +416,9 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                             if (newP == null || newP <= 0) {
                               return 'Must be > 0';
                             }
-                            final oldP = double.tryParse(_oldPriceController.text.trim());
+                            final oldP = double.tryParse(
+                              _oldPriceController.text.trim(),
+                            );
                             if (oldP != null && newP > oldP) {
                               return 'Must be <= ₹$oldP';
                             }
@@ -361,13 +433,20 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               const SizedBox(height: 16),
 
               // Expiry Duration Selector
-              const Text('Offer Validity / Expiry *', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Offer Validity / Expiry *',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
-                value: _selectedDuration,
-                decoration: const InputDecoration(prefixIcon: Icon(Icons.timer)),
+                initialValue: _selectedDuration,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.timer),
+                ),
                 items: ['2 Hours', '4 Hours', '6 Hours', '12 Hours', '24 Hours']
-                    .map((dur) => DropdownMenuItem(value: dur, child: Text(dur)))
+                    .map(
+                      (dur) => DropdownMenuItem(value: dur, child: Text(dur)),
+                    )
                     .toList(),
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedDuration = val);
@@ -375,8 +454,20 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               ),
               const SizedBox(height: 16),
 
+              if (_isSubmitting)
+                Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Text(_progress),
+                ),
+              if (!AuthService.instance.isDemo)
+                const Text(
+                  'Image selection will be added in a later phase. Offers can be saved without an image.',
+                ),
               // Image Selection & Attachment Box
-              const Text('Offer Image (Optional / Max 5MB)', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+              const Text(
+                'Offer Image (Optional / Max 5MB)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+              ),
               const SizedBox(height: 6),
               if (_hasSelectedImage) ...[
                 Container(
@@ -392,24 +483,34 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         width: 50,
                         height: 50,
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                          color: Theme.of(context).colorScheme.primary
+                              .withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
-                        child: Icon(Icons.image, color: Theme.of(context).colorScheme.primary),
+                        child: Icon(
+                          Icons.image,
+                          color: Theme.of(context).colorScheme.primary,
+                        ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Column(
-                          crossAlignment: CrossAlignment.start,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
                               _selectedImageName ?? 'clearance_item.jpg',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                               overflow: TextOverflow.ellipsis,
                             ),
                             const Text(
                               'JPG Image Attached (Ready to Upload)',
-                              style: TextStyle(fontSize: 11, color: Colors.green),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.green,
+                              ),
                             ),
                           ],
                         ),
@@ -417,10 +518,15 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       IconButton(
                         icon: const Icon(Icons.refresh, color: Colors.blue),
                         tooltip: 'Replace Image',
-                        onPressed: _pickSampleImage,
+                        onPressed: AuthService.instance.isDemo
+                            ? _pickSampleImage
+                            : null,
                       ),
                       IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
+                        icon: const Icon(
+                          Icons.delete_outline,
+                          color: Colors.red,
+                        ),
                         tooltip: 'Remove Image',
                         onPressed: _removeSelectedImage,
                       ),
@@ -429,7 +535,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 ),
               ] else ...[
                 InkWell(
-                  onTap: _pickSampleImage,
+                  onTap: AuthService.instance.isDemo ? _pickSampleImage : null,
                   borderRadius: BorderRadius.circular(12),
                   child: Container(
                     height: 110,
@@ -437,16 +543,27 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                     decoration: BoxDecoration(
                       color: Colors.grey.shade100,
                       borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade400, style: BorderStyle.solid),
+                      border: Border.all(
+                        color: Colors.grey.shade400,
+                        style: BorderStyle.solid,
+                      ),
                     ),
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Icon(Icons.add_a_photo_outlined, size: 36, color: Colors.grey.shade600),
+                        Icon(
+                          Icons.add_a_photo_outlined,
+                          size: 36,
+                          color: Colors.grey.shade600,
+                        ),
                         const SizedBox(height: 8),
                         Text(
                           'Tap to attach product image',
-                          style: TextStyle(fontSize: 13, color: Colors.grey.shade700, fontWeight: FontWeight.w500),
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: Colors.grey.shade700,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ],
                     ),
@@ -460,19 +577,30 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: (!isApproved || _isSubmitting) ? null : _handlePublishOffer,
-                  icon: Icon(!isApproved ? Icons.lock : Icons.cloud_upload_outlined),
-                  label: Text(!isApproved
-                      ? 'Publish Locked (Store Approval Pending)'
-                      : 'Publish Clearance Offer'),
+                  onPressed: (!isApproved || _isSubmitting)
+                      ? null
+                      : _handlePublishOffer,
+                  icon: Icon(
+                    !isApproved ? Icons.lock : Icons.cloud_upload_outlined,
+                  ),
+                  label: Text(
+                    !isApproved
+                        ? 'Publish Locked (Store Approval Pending)'
+                        : 'Publish Clearance Offer',
+                  ),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: isApproved ? Theme.of(context).colorScheme.primary : Colors.grey.shade400,
+                    backgroundColor: isApproved
+                        ? Theme.of(context).colorScheme.primary
+                        : Colors.grey.shade400,
                     foregroundColor: Colors.white,
                     elevation: 2,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(14),
                     ),
-                    textStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    textStyle: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
               ),

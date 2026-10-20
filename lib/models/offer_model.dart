@@ -45,7 +45,9 @@ class OfferModel {
       longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
       geohash: data['geohash'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      expiryTime: (data['expiryTime'] as Timestamp?)?.toDate() ?? DateTime.now().add(const Duration(hours: 24)),
+      expiryTime:
+          (data['expiryTime'] as Timestamp?)?.toDate() ??
+          DateTime.now().add(const Duration(hours: 24)),
       status: data['status'] ?? 'draft',
     );
   }
