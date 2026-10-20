@@ -35,7 +35,7 @@ service cloud.firestore {
     }
 
     function isValidGeohash(hash) {
-      return hash is string && hash.size() >= 1 && hash.size() <= 12;
+      return hash is string && hash.matches('[0123456789bcdefghjkmnpqrstuvwxyz]{1,12}');
     }
 
     function isValidLat(lat) {
@@ -83,41 +83,69 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // --- VENDORS COLLECTION ---
-    // Document ID: {uid}
+    function validStoreLocation(d) {
+      return (!d.keys().hasAny(['latitude','longitude','geohash','locationConfirmedAt']))
+        || (d.keys().hasAll(['latitude','longitude','geohash'])
+          && isValidLat(d.latitude) && isValidLng(d.longitude) && isValidGeohash(d.geohash)
+          && (!('locationConfirmedAt' in d) || (d.locationConfirmedAt is timestamp
+            && d.locationConfirmedAt <= request.time && d.geohash.size() == 6)));
+    }
+    function validVendor(d) {
+      return d.keys().hasAll(['name','phone','category','createdAt'])
+        && d.keys().hasOnly(['name','phone','category','latitude','longitude','geohash','locationConfirmedAt','address','description','imageUrl','createdAt','updatedAt'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 100
+        && d.phone is string && d.phone.size() >= 5 && d.phone.size() <= 20
+        && d.category is string && d.category.size() >= 1 && d.category.size() <= 50
+        && (!('address' in d) || (d.address is string && d.address.size() <= 1000))
+        && (!('description' in d) || (d.description is string && d.description.size() <= 1000))
+        && (!('imageUrl' in d) || (d.imageUrl is string && d.imageUrl.size() <= 2048))
+        && d.createdAt is timestamp
+        && (!('updatedAt' in d) || d.updatedAt is timestamp)
+        && validStoreLocation(d);
+    }
     match /vendors/{uid} {
-      // Public vendor profiles are readable by customers/anyone
       allow read: if true;
-
-      // Only an authenticated user whose profile role is 'vendor' can create a vendor profile
       allow create: if isOwner(uid)
         && getAfter(/databases/$(database)/documents/users/$(uid)).data.role == 'vendor'
-        && request.resource.data.keys().hasAll(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'createdAt'])
-        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'address', 'description', 'imageUrl', 'createdAt', 'updatedAt'])
-        && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
-        && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 20
-        && request.resource.data.category is string && request.resource.data.category.size() >= 1 && request.resource.data.category.size() <= 50
-        && isValidLat(request.resource.data.latitude)
-        && isValidLng(request.resource.data.longitude)
-        && isValidGeohash(request.resource.data.geohash)
-        && request.resource.data.createdAt is timestamp;
-
-      // Vendor can update their profile fields (cannot change createdAt or owner uid)
-      allow update: if isOwner(uid)
-        && isVendor()
-        && request.resource.data.keys().hasOnly(['name', 'phone', 'category', 'latitude', 'longitude', 'geohash', 'address', 'description', 'imageUrl', 'createdAt', 'updatedAt'])
-        && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 100
-        && request.resource.data.phone is string && request.resource.data.phone.size() >= 5 && request.resource.data.phone.size() <= 20
-        && request.resource.data.category is string && request.resource.data.category.size() >= 1 && request.resource.data.category.size() <= 50
-        && isValidLat(request.resource.data.latitude)
-        && isValidLng(request.resource.data.longitude)
-        && isValidGeohash(request.resource.data.geohash)
+        && validVendor(request.resource.data);
+      allow update: if isOwner(uid) && isVendor() && validVendor(request.resource.data)
         && request.resource.data.createdAt == resource.data.createdAt;
-
-      // Vendor can delete their profile
       allow delete: if isOwner(uid) && isVendor();
     }
 
+    function validCategory(category) {
+      return category is string && category in ['groceries','fresh_produce','bakery_dairy','snacks_beverages','services','other'];
+    }
+    function validImage(d, offerId) {
+      return (d.imageUrl == '' && !d.keys().hasAny(['imagePath','imageContentType','imageSize']))
+        || (d.keys().hasAll(['imagePath','imageContentType','imageSize'])
+          && d.imageUrl.matches('https?://.*')
+          && d.imagePath is string
+          && d.imagePath.matches('offers/' + request.auth.uid + '/' + offerId + '/[a-f0-9]{64}\\.(jpg|png|webp)')
+          && d.imageSize is int && d.imageSize > 0 && d.imageSize <= 5 * 1024 * 1024
+          && ((d.imageContentType == 'image/jpeg' && d.imagePath.matches('.*\\.jpg'))
+            || (d.imageContentType == 'image/png' && d.imagePath.matches('.*\\.png'))
+            || (d.imageContentType == 'image/webp' && d.imagePath.matches('.*\\.webp'))));
+    }
+    function validOffer(d) {
+      return d.keys().hasAll(['vendorId','title','description','category','oldPrice','newPrice','imageUrl','latitude','longitude','geohash','createdAt','expiryTime','status'])
+        && d.keys().hasOnly(['vendorId','title','description','category','oldPrice','newPrice','imageUrl','imagePath','imageContentType','imageSize','latitude','longitude','geohash','createdAt','expiryTime','status'])
+        && d.vendorId is string && d.vendorId == request.auth.uid
+        && d.title is string && d.title.size() >= 1 && d.title.size() <= 100
+        && d.description is string && d.description.size() <= 1000
+        && validCategory(d.category)
+        && d.oldPrice is number && d.oldPrice > 0 && d.oldPrice < 1000000000000
+        && d.newPrice is number && d.newPrice > 0 && d.newPrice <= d.oldPrice
+        && d.imageUrl is string && d.imageUrl.size() <= 2048
+        && isValidLat(d.latitude) && isValidLng(d.longitude)
+        && isValidGeohash(d.geohash) && d.geohash.size() == 6
+        && d.createdAt is timestamp && d.expiryTime is timestamp && d.expiryTime > d.createdAt;
+    }
+    function confirmedStore(d) {
+      let store = get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data;
+      return store.locationConfirmedAt is timestamp && store.locationConfirmedAt <= request.time
+        && d.latitude == store.latitude && d.longitude == store.longitude && d.geohash == store.geohash;
+    }
     // --- OFFERS COLLECTION ---
     // Document ID: {offerId}
     match /offers/{offerId} {
@@ -128,49 +156,24 @@ service cloud.firestore {
       allow read: if (resource.data.status == 'active')
         || (isAuthenticated() && resource.data.vendorId == request.auth.uid);
 
-      // Only an APPROVED vendor can create an offer (Pending vendors blocked)
-      allow create: if isApprovedVendor()
-        && request.resource.data.vendorId == request.auth.uid
-        && request.resource.data.keys().hasOnly(['vendorId', 'title', 'description', 'oldPrice', 'newPrice', 'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt', 'expiryTime', 'status'])
-        && request.resource.data.keys().hasAll([
-          'vendorId', 'title', 'description', 'oldPrice', 'newPrice',
-          'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt',
-          'expiryTime', 'status'
-        ])
-        && request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100
-        && request.resource.data.description is string && request.resource.data.description.size() <= 1000
-        && (request.resource.data.oldPrice is int || request.resource.data.oldPrice is float) && request.resource.data.oldPrice > 0.0
-        && (request.resource.data.newPrice is int || request.resource.data.newPrice is float) && request.resource.data.newPrice > 0.0
-        && request.resource.data.newPrice <= request.resource.data.oldPrice
-        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2048
-        && isValidLat(request.resource.data.latitude)
-        && isValidLng(request.resource.data.longitude)
-        && isValidGeohash(request.resource.data.geohash)
-        && request.resource.data.createdAt is timestamp
-        && request.resource.data.expiryTime is timestamp
-        && request.resource.data.expiryTime > request.resource.data.createdAt
-        && (request.resource.data.status == 'active' || request.resource.data.status == 'draft');
-
-      // Only approved owner vendor can update their own offer
-      allow update: if isApprovedVendor()
-        && resource.data.vendorId == request.auth.uid
+      allow create: if isApprovedVendor() && validOffer(request.resource.data)
+        && confirmedStore(request.resource.data) && validImage(request.resource.data, offerId)
+        && request.resource.data.status in ['active','draft'];
+      // Legacy documents remain readable. Any future edit must explicitly add a
+      // stable category; unchanged legacy images can retain their old URL.
+      allow update: if isApprovedVendor() && resource.data.vendorId == request.auth.uid
         && request.resource.data.vendorId == resource.data.vendorId
-        && request.resource.data.keys().hasOnly(['vendorId', 'title', 'description', 'oldPrice', 'newPrice', 'imageUrl', 'latitude', 'longitude', 'geohash', 'createdAt', 'expiryTime', 'status'])
         && request.resource.data.createdAt == resource.data.createdAt
-        && request.resource.data.title is string && request.resource.data.title.size() >= 1 && request.resource.data.title.size() <= 100
-        && request.resource.data.description is string && request.resource.data.description.size() <= 1000
-        && (request.resource.data.oldPrice is int || request.resource.data.oldPrice is float) && request.resource.data.oldPrice > 0.0
-        && (request.resource.data.newPrice is int || request.resource.data.newPrice is float) && request.resource.data.newPrice > 0.0
-        && request.resource.data.newPrice <= request.resource.data.oldPrice
-        && request.resource.data.imageUrl is string && request.resource.data.imageUrl.size() <= 2048
-        && isValidLat(request.resource.data.latitude)
-        && isValidLng(request.resource.data.longitude)
-        && isValidGeohash(request.resource.data.geohash)
-        && request.resource.data.expiryTime is timestamp
-        && request.resource.data.status in ['active', 'expired', 'deleted', 'draft'];
-
-      // Only owner vendor can delete their own offer
-      allow delete: if isAuthenticated() && resource.data.vendorId == request.auth.uid;
+        && request.resource.data.latitude == resource.data.latitude
+        && request.resource.data.longitude == resource.data.longitude
+        && request.resource.data.geohash == resource.data.geohash
+        && validOffer(request.resource.data)
+        && (validImage(request.resource.data, offerId)
+          || (!resource.data.keys().hasAny(['imagePath','imageContentType','imageSize'])
+            && request.resource.data.imageUrl == resource.data.imageUrl
+            && !request.resource.data.keys().hasAny(['imagePath','imageContentType','imageSize'])))
+        && request.resource.data.status in ['active','expired','deleted','draft'];
+      allow delete: if isOwner(resource.data.vendorId);
     }
   }
 }

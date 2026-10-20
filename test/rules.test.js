@@ -8,7 +8,7 @@ const path = require('path');
 const test = require('node:test');
 const assert = require('node:assert');
 
-const PROJECT_ID = 'sandhai-5km-demo';
+const PROJECT_ID = process.env.GCLOUD_PROJECT || 'sandhai-phase3-tests';
 
 let testEnv;
 
@@ -27,12 +27,12 @@ test.before(async () => {
     firestore: {
       rules: firestoreRules,
       host: '127.0.0.1',
-      port: 8080,
+      port: Number(process.env.FIRESTORE_EMULATOR_HOST?.split(':').pop() || 8180),
     },
     storage: {
       rules: storageRules,
       host: '127.0.0.1',
-      port: 9199,
+      port: Number(process.env.FIREBASE_STORAGE_EMULATOR_HOST?.split(':').pop() || 9299),
     },
   });
 });
@@ -53,6 +53,7 @@ test.beforeEach(async () => {
 async function seedUser(uid, role, approvalStatus = 'approved', displayName = 'Test User') {
   await testEnv.withSecurityRulesDisabled(async (context) => {
     const db = context.firestore();
+    if (role === 'vendor') await db.collection('vendors').doc(uid).set(vendorData());
     await db.collection('users').doc(uid).set({
       displayName,
       email: `${uid}@example.com`,
@@ -78,7 +79,7 @@ async function seedOffer(offerId, vendorId, extra = {}) {
       imageUrl: 'https://storage.example.com/tomatoes.jpg',
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -101,10 +102,11 @@ test('1. An unauthenticated user cannot create an offer', async () => {
       description: 'Test description',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -125,10 +127,11 @@ test('2. A customer cannot create an offer', async () => {
       description: 'Should fail',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -180,10 +183,11 @@ test('4. Pending vendor cannot create an offer, approved vendor can', async () =
       description: 'Pending vendor trying to publish',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -198,10 +202,11 @@ test('4. Pending vendor cannot create an offer, approved vendor can', async () =
       description: 'Approved vendor publishing',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -251,10 +256,11 @@ test('7. Invalid offer data is rejected', async () => {
       description: 'Invalid price',
       oldPrice: 50.0,
       newPrice: 100.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -269,10 +275,11 @@ test('7. Invalid offer data is rejected', async () => {
       description: 'Latitude 100.0',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 100.0,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -287,10 +294,11 @@ test('7. Invalid offer data is rejected', async () => {
       description: 'Longitude 200.0',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 200.0,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt: now,
       expiryTime: expiry,
       status: 'active',
@@ -305,7 +313,8 @@ test('7. Invalid offer data is rejected', async () => {
       description: 'Empty geohash',
       oldPrice: 100.0,
       newPrice: 50.0,
-      imageUrl: 'https://example.com/img.jpg',
+      imageUrl: '',
+      category: 'groceries',
       latitude: 13.0827,
       longitude: 80.2707,
       geohash: '',
@@ -394,7 +403,7 @@ async function seedVendor(uid, name, phone, category, createdAt = new Date()) {
       category,
       latitude: 13.0827,
       longitude: 80.2707,
-      geohash: 'tf340w',
+      geohash: 'tf346t',
       createdAt,
     });
   });
@@ -442,12 +451,12 @@ function userData(uid, role='vendor', status='pending') {
 }
 function vendorData() {
   return {name:'Persistent Store',phone:'9876543210',category:'Groceries',address:'Store address',
-    latitude:13.0827,longitude:80.2707,geohash:'tf346c',createdAt:new Date()};
+    latitude:13.0827,longitude:80.2707,geohash:'tf346t',locationConfirmedAt:new Date(),createdAt:new Date()};
 }
 function offerData(uid, status='active') {
   const now=new Date();
   return {vendorId:uid,title:'Persistent offer',description:'Clearance stock',oldPrice:100,newPrice:50,imageUrl:'',
-    latitude:13.0827,longitude:80.2707,geohash:'tf346c',createdAt:now,expiryTime:new Date(+now+3600000),status};
+    category:'groceries',latitude:13.0827,longitude:80.2707,geohash:'tf346t',createdAt:now,expiryTime:new Date(+now+3600000),status};
 }
 
 test('13. Atomic vendor completion creates both profiles and never grants approval', async()=>{
@@ -555,4 +564,59 @@ test('20. Offer field injection is rejected on creation and update',async()=>{
   await assertFails(db.doc('offers/injected').set({...offerData('offerFields'),isAdmin:true}));
   await assertSucceeds(db.doc('offers/clean').set(offerData('offerFields')));
   await assertFails(db.doc('offers/clean').update({isAdmin:true}));
+});
+
+test('21. Unconfirmed legacy coordinates cannot publish; confirmed store snapshots must match', async()=>{
+  await seedUser('locationVendor','vendor','approved');
+  const db=testEnv.authenticatedContext('locationVendor').firestore();
+  await testEnv.withSecurityRulesDisabled(c=>c.firestore().doc('vendors/locationVendor').set({...vendorData(),locationConfirmedAt:null}));
+  await assertFails(db.doc('offers/unconfirmed').set(offerData('locationVendor')));
+  await assertSucceeds(db.doc('vendors/locationVendor').update({locationConfirmedAt:new Date()}));
+  await assertSucceeds(db.doc('offers/confirmed').set(offerData('locationVendor')));
+  for(const fields of [{latitude:0},{longitude:0},{geohash:'tf340w'},{latitude:NaN},{longitude:Infinity}]) {
+    await assertFails(db.collection('offers').add({...offerData('locationVendor'),...fields}));
+  }
+});
+test('22. Registration permits absent coordinates; invalid or partial confirmed locations fail',async()=>{
+  await seedUser('emptyLocation','vendor','pending');
+  const db=testEnv.authenticatedContext('emptyLocation').firestore();
+  await testEnv.withSecurityRulesDisabled(c=>c.firestore().doc('vendors/emptyLocation').delete());
+  const minimal={name:'No fabricated location',phone:'9876543210',category:'groceries',createdAt:new Date()};
+  await assertSucceeds(db.doc('vendors/emptyLocation').set(minimal));
+  for(const fields of [{latitude:12},{latitude:91,longitude:20,geohash:'s00000'}, {latitude:NaN,longitude:20,geohash:'s00000'}, {latitude:12,longitude:20,geohash:'!!!!!!'}, {locationConfirmedAt:true}]) {
+    await assertFails(db.doc('vendors/emptyLocation').update(fields));
+  }
+});
+test('23. Offer category, numeric types, image metadata, ownership and required keys are enforced',async()=>{
+  await seedUser('schemaVendor','vendor','approved');
+  const db=testEnv.authenticatedContext('schemaVendor').firestore();
+  const base=offerData('schemaVendor');
+  for(const fields of [{category:'Bakery & Dairy'},{category:'unknown'},{category:4},{oldPrice:'100'},{oldPrice:Infinity},{newPrice:NaN},{vendorId:'another'},{imageUrl:4},{expiryTime:'tomorrow'},{imagePath:'offers/other/id/image.png'}]) {
+    await assertFails(db.collection('offers').add({...base,...fields}));
+  }
+  for(const key of Object.keys(base)) { const invalid={...base};delete invalid[key];await assertFails(db.collection('offers').add(invalid)); }
+  const path=`offers/schemaVendor/photo/${'a'.repeat(64)}.png`;
+  const photo={...base,imageUrl:'http://127.0.0.1:9299/image',imagePath:path,imageContentType:'image/png',imageSize:123};
+  await assertSucceeds(db.doc('offers/photo').set(photo));
+  await assertFails(db.doc('offers/photo').update({imageContentType:'image/jpeg'}));
+  await assertFails(db.doc('offers/photo').update({imageSize:5242881}));
+  await assertFails(db.doc('offers/photo').update({imageSize:0}));
+  await assertFails(db.doc('offers/photo').update({latitude:12}));
+  const downgrade={...photo};delete downgrade.imagePath;delete downgrade.imageContentType;delete downgrade.imageSize;
+  await assertFails(db.doc('offers/photo').set(downgrade));
+});
+test('24. Storage MIME/extension/size checks and deletion are separate; published photos are protected',async()=>{
+  await seedUser('photoOwner','vendor','approved');await seedUser('photoOther','vendor','approved');
+  const storage=testEnv.authenticatedContext('photoOwner').storage();
+  for(const [name,mime,bytes] of [['bad.jpg','image/png',Buffer.from('x')],['zero.png','image/png',Buffer.alloc(0)],['big.png','image/png',Buffer.alloc(5242881)]]) {
+    await assertFails(storage.ref(`offers/photoOwner/photo/${name}`).put(bytes,{contentType:mime}));
+  }
+  const imagePath=`offers/photoOwner/photo/${'b'.repeat(64)}.png`;
+  const ref=storage.ref(imagePath);await assertSucceeds(ref.put(Buffer.from('png'),{contentType:'image/png'}));
+  await testEnv.withSecurityRulesDisabled(c=>c.firestore().doc('offers/photo').set({...offerData('photoOwner'),imagePath}));
+  await assertFails(ref.delete());
+  await assertFails(ref.put(Buffer.from('different bytes'),{contentType:'image/png'}));
+  await assertFails(testEnv.authenticatedContext('photoOther').storage().ref(imagePath).delete());
+  await testEnv.withSecurityRulesDisabled(c=>c.firestore().doc('offers/photo').delete());
+  await seedUser('photoOwner','vendor','suspended');await assertSucceeds(ref.delete());
 });

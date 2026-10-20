@@ -1,3 +1,5 @@
+import '../core/images/selected_image.dart';
+
 import 'dart:typed_data';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -36,32 +38,53 @@ class FirebaseOfferRepository implements OfferRepository {
     Uint8List bytes,
     String filename,
   ) async {
-    final safeName = filename.replaceAll(RegExp(r'[^a-zA-Z0-9._-]'), '_');
-    final extension = safeName.split('.').last.toLowerCase();
-    final mime = switch (extension) {
-      'png' => 'image/png',
-      'webp' => 'image/webp',
-      'jpg' || 'jpeg' => 'image/jpeg',
-      _ => throw const AppFailure('Use a PNG, JPEG, or WebP image.'),
-    };
-    final ref = _storage.ref('offers/$uid/$id/$safeName');
+    final image = await SelectedImage.validate(bytes);
+    final ref = _storage.ref('offers/$uid/$id/${image.filename}');
     try {
-      await ref.putData(bytes, SettableMetadata(contentType: mime));
+      final metadata = await ref.getMetadata();
+      if (metadata.customMetadata?['sha256'] == image.digest &&
+          metadata.size == bytes.length &&
+          metadata.contentType == image.contentType) {
+        return UploadedImage(ref.fullPath, await ref.getDownloadURL());
+      }
+      throw const AppFailure(
+        'The existing upload has unexpected metadata. Choose another photo or contact support.',
+      );
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') rethrow;
+    }
+    try {
+      await ref.putData(
+        image.bytes,
+        SettableMetadata(
+          contentType: image.contentType,
+          customMetadata: {'sha256': image.digest},
+        ),
+      );
       return UploadedImage(ref.fullPath, await ref.getDownloadURL());
-    } catch (_) {
-      // Preserve the upload error even if cleanup also fails (e.g. offline).
+    } catch (e) {
       try {
         await ref.delete();
-      } catch (_) {
-        /* Best effort; no document references this failed upload. */
+      } on FirebaseException catch (cleanup) {
+        if (cleanup.code != 'object-not-found') {
+          throw AppFailure(
+            '${errorMessage(e)} Unreferenced photo cleanup failed (${ref.fullPath}). Retry with the same photo to reconcile this upload.',
+          );
+        }
       }
       rethrow;
     }
   }
 
   @override
-  Future<void> deleteUpload(UploadedImage image) =>
-      _storage.ref(image.path).delete();
+  Future<void> deleteUpload(UploadedImage image) async {
+    try {
+      await _storage.ref(image.path).delete();
+    } on FirebaseException catch (e) {
+      if (e.code != 'object-not-found') rethrow;
+    }
+  }
+
   @override
   Future<OfferModel> save(OfferModel offer) => _db.runTransaction((tx) async {
     final user = await tx.get(_db.collection('users').doc(offer.vendorId));

@@ -22,13 +22,13 @@
 ### 🏷️ 3. Clearance Offer Posting & Image Upload
 - Material 3 offer posting form collecting product title, description, category, original price, clearance price, and offer validity duration (hours).
 - **Client & Server Price Validation**: Real-time validation enforcing `clearancePrice <= originalPrice` and positive numeric prices.
-- **Firebase Storage Integration**: The service accepts image bytes and awaits upload and URL retrieval. Upload paths are `offers/{vendorUid}/{offerId}/{filename}`, with image MIME and size limits (`<= 5MB`). Real image selection remains deferred; synthetic attachment is available only in demo mode, and the Firebase-mode photo control is disabled.
+- **Firebase Storage Integration**: The service accepts image bytes and awaits upload and URL retrieval. Upload paths are `offers/{vendorUid}/{offerId}/{filename}`, with image MIME and size limits (`<= 5MB`). Android and web use the real system/gallery picker, with decoded preview, cancellation, and Android activity-loss recovery. JPEG, PNG, and WebP only; up to 5 MiB (5,242,880 bytes) and 40 megapixels. The app checks signatures, dimensions, and decoded content; MIME and filename extension are derived from content.
 - **Confirmed saves**: Online Firestore transactions distinguish pending operations from confirmed saves. Failed profile/offer saves display errors and retain form values for retry. Each offer form keeps a stable document ID to reconcile lost responses without duplicate offers. Failed uploads stop publication; confirmed unreferenced uploads are cleaned up when possible. An uncertain commit retains its image until the outcome can be checked.
 
 ### 📍 4. Spatial Geolocation & Deterministic Geohashing
 - **Deterministic Base32 Geohash Utility (`GeohashUtils`)**: Generates 6-character spatial geohashes (~1.2 km x 0.6 km bounding box) for stored spatial indexing. Radius-aware query coverage and exact distance filtering remain future work.
 - **Vendor Store Location Resolution**: Offers automatically inherit registered vendor store coordinates (`latitude`, `longitude`, `geohash`) from `vendors/{uid}`.
-- **Strict Location Validation**: The offer service rejects invalid coordinates, but vendor registration/model defaults still use sample coordinates; location acquisition is a later phase.
+- **Strict Location Validation**: The offer service rejects invalid coordinates, but registration starts without coordinates. Vendors explicitly confirm or correct a foreground device-location suggestion, or manually enter coordinates. A server confirmation timestamp gates publication; legacy coordinates without confirmation cannot publish.
 
 ### 🛡️ 5. Firebase Security Rules
 - **Firestore Security (`firestore.rules`)**: Strictly enforces role checks (`isApprovedVendor()`), path ownership (`request.auth.uid == vendorId`), profile field allowlists, price relationships, timestamp validity, and coordinate bounds (`-90 <= lat <= 90`, `-180 <= lng <= 180`).
@@ -53,11 +53,11 @@ flutter doctor -v
 flutter pub get
 ```
 
-For Android, install the Android SDK command-line tools, platforms **android-36** and **android-34** (the existing Firebase plugins),
+For Android, install the Android SDK command-line tools, platforms **android-36**, **android-35**, and **android-34** (the plugins), CMake **3.22.1**,
 build-tools **36.0.0**, and NDK **28.2.13676358**, and accept the SDK licenses:
 
 ```bash
-sdkmanager "platform-tools" "platforms;android-36" "platforms;android-34" "build-tools;36.0.0" "ndk;28.2.13676358"
+sdkmanager "platform-tools" "platforms;android-36" "platforms;android-34" "platforms;android-35" "cmake;3.22.1" "build-tools;36.0.0" "ndk;28.2.13676358"
 flutter doctor --android-licenses
 ```
 
@@ -106,9 +106,7 @@ flutter run -d <android-device-id> --dart-define=APP_MODE=demo
 
 Demo sign-in accepts an email and a nonempty password without creating a Firebase
 account. Emails containing `vendor` select the existing pending-vendor demo path;
-other emails select the customer path. Registration also works locally. Sample
-customer feeds, synthetic photo attachment, and distances are available only in
-demo mode. The vendor dashboard shows only offers created by that demo account.
+other emails select the customer path. Registration also works locally. Sample customer feeds and distances are demo-only. Photo selection is real in every mode; demo uploads remain in memory. The vendor dashboard shows only offers created by that demo account.
 
 ### Firebase emulators
 
@@ -161,15 +159,14 @@ Auth sessions persist locally, while Firestore disk persistence is disabled.
 Writes use online transactions and are acknowledged by the server before success
 is displayed. An unavailable server can leave an operation pending while the SDK
 retries; pending text remains visible and the app does not claim it was saved.
-Unsaved form values are retained while that screen remains open, not across a
-browser reload. Saved profiles/offers survive restart as long as emulator data
+Offer fields are also checkpointed locally before photo selection and publication. A vendor can resume that draft after restart; photo bytes must be reselected unless Android returns a lost picker result. Drafts, picker results, and pending-upload records are scoped by application mode/project and vendor UID. Profile/auth form edits remain in memory. Saved profiles/offers survive restart as long as emulator data
 is retained. For emulator data across CLI restarts, use:
 
 ```bash
 firebase emulators:start --only firestore,storage,auth --project sandhai-5km-demo --import=.firebase/local-data --export-on-exit=.firebase/local-data
 ```
 
-Omit `--import` on the first start when no export exists. For local approval
+Omit `--import` on the first start when no export exists. Export-on-exit protects graceful shutdowns; take explicit checkpoints before verification because an abnormal emulator process exit can lose in-memory Auth/Storage changes. For local approval
 testing, change your own emulator user's `approvalStatus` to `approved`,
 `rejected`, or `suspended` in the Emulator UI at `http://127.0.0.1:4000`.
 Clients cannot change approval through application writes. Administration is a
@@ -353,3 +350,76 @@ sandhai/
 ## 📄 License
 
 This project is developed as a hyperlocal clearance marketplace demo application.
+
+
+## Phase 3: store location, categories, and photos
+
+1. Register/sign in as a vendor. New stores have **no default location**. Approval
+   still comes from trusted backend administration (or the local Emulator UI).
+2. Open **Business profile → Confirm / edit store location**. Choose **Suggest
+   device location**, review or edit both coordinates, check **I confirm this is
+   my store location**, then save. Foreground location only; no background tracking.
+   Denied permission, permanent denial, disabled services, timeouts, and unsupported
+   platforms show errors and allow manual entry. Browser location needs HTTPS or
+   localhost. Android location permission is requested only when this button is used.
+3. Open **Post Clearance Offer**, select a category, and use **Choose photo**.
+   Cancel keeps the previous selection. A valid photo previews before publication.
+   Files larger than 5 MiB, images over 40 MP, fake/truncated content, HEIC, GIF,
+   and SVG are rejected. Convert unsupported formats before selecting them.
+4. Publish while approved. The offer captures the server-confirmed store position.
+   A failed upload/save keeps fields and a visible error. Retry uses the same offer
+   ID and content-hashed image path. An uncertain commit is read from the server
+   before retrying or deleting any object. Confirmed referenced images are protected
+   from orphan cleanup. Cleanup failures retain a local pending-upload record and
+   report the error; retry reconciles it. Abandoned records are not automatically
+   garbage-collected. Full offer editing/deletion remains a subsequent phase.
+5. After Android destroys the picker activity, the dashboard offers **Recover
+   selected photo and draft**. Review and submit it explicitly. No recovered photo
+   or draft is shown to another account. Published offers/photos load on restart.
+
+Stable offer category IDs are `groceries`, `fresh_produce`, `bakery_dairy`,
+`snacks_beverages`, `services`, and `other`. Labels are separate. Missing/unknown
+legacy categories read as `other`; recognized historical labels map to their ID.
+Categories are never guessed from titles/descriptions. Old offers remain readable.
+Do not bulk-mark old store coordinates as confirmed: owners must review them.
+See [Phase 3 schema and migration notes](phase_3_location_images.md).
+
+### Verification without clearing existing fixtures
+
+Export existing emulators before changing/resetting them. Keep exports outside
+tracked source and preserve older exports:
+
+```bash
+firebase emulators:export /tmp/sandhai-before-phase3 --config firebase.json --project sandhai-5km-demo
+npm test
+flutter analyze
+flutter test
+# Separate ports/project: the rules suite clears only its test database.
+npm run test:emulators
+```
+
+`firebase.phase3-tests.json` uses Firestore 8180, Storage 9299, Auth 9198,
+hub 4401, logging 4501, and websocket 9250, with project `sandhai-phase3-tests`.
+Do not point the destructive rules suite at retained developer fixtures.
+
+With the ordinary Auth/Firestore/Storage emulators running on 9099/8080/9199:
+
+```bash
+flutter build web --dart-define=APP_MODE=emulator --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1 --output=build/emulator-web
+SANDHAI_ARTIFACTS=/tmp/sandhai-phase3-browser npm run test:browser:phase3
+
+# Reapply these after reconnecting USB or a test runner removes forwarding.
+adb -s 373c972d reverse tcp:9099 tcp:9099
+adb -s 373c972d reverse tcp:8080 tcp:8080
+adb -s 373c972d reverse tcp:9199 tcp:9199
+JAVA_HOME=/absolute/path/to/jdk-21 flutter test integration_test/location_images_test.dart -d 373c972d --dart-define=APP_MODE=emulator --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1 --dart-define=FIREBASE_EMULATOR_PROJECT_ID=sandhai-5km-demo
+```
+
+The browser probe drives Chrome's actual file picker with the public grocery-photo
+fixture. Browser geolocation is injected through Chrome's permission/geolocation
+API for reproducibility; this does not prove a real browser GPS fix. The native
+Dart integration uses a documented coordinate/PNG fixture and real Firebase SDKs.
+`tool/verify_phase3_android.py` separately drives the physical foreground-location
+permission/GPS and actual Android photo picker. See the Phase 3 report for exact
+phone commands, evidence, and any unverified checks. Production remains unverified
+until real Firebase configuration is supplied.

@@ -8,6 +8,8 @@ const { initializeTestEnvironment } = require('@firebase/rules-unit-testing');
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || 'playwright-core');
 const projectId = 'sandhai-5km-demo';
 const repositoryRoot = path.resolve(__dirname, '..');
+const artifactRoot=process.env.SANDHAI_ARTIFACTS||'/tmp';
+fs.mkdirSync(artifactRoot,{recursive:true});
 const root = path.join(repositoryRoot, 'build/emulator-web');
 const originalRules = fs.readFileSync(path.join(repositoryRoot, 'firestore.rules'), 'utf8');
 const host = '127.0.0.1';
@@ -90,6 +92,12 @@ async function createAccount(email) {
     checks.push('browser reload restores the signed-in pending vendor');
     await admin(db=>db.doc(`users/${a}`).update({approvalStatus:'approved'}));await text('APPROVED');
     checks.push('approval updates during an active session');
+    await button('Business profile');await text('Vendor Profile');
+    await button('Confirm / edit store location');await text('Confirm store location');
+    await fill(0,'11.1');await fill(1,'77.2');
+    await page.getByRole('checkbox').click();await button('Save confirmed location');
+    await page.getByText('Vendor Profile',{exact:true}).waitFor({timeout:30000});
+    await page.getByRole('button',{name:'Back',exact:true}).click();await text('Your offers');
     await button('Post Clearance Offer');await text('Post Clearance Offer');
     for(const [i,value] of ['Persistent offer A','Saved details','100','50'].entries())await fill(i,value);
     await button('Publish Clearance Offer');await text('Persistent offer A');
@@ -139,11 +147,11 @@ async function createAccount(email) {
     assert.equal(await page.getByText('Mock 5 KM',{exact:false}).count(),0);
     assert.equal(await page.getByText('Push Notifications',{exact:false}).count(),0);
     checks.push('customer registration restores after reload and live screens contain no sample offers/location/settings');
-    await page.screenshot({path:'/tmp/sandhai-phase2-browser.png'});
+    await page.screenshot({path:path.join(artifactRoot,'sandhai-phase2-browser.png')});
     assert.deepEqual(errors,[]);
-    console.log(JSON.stringify({result:'PASS',browser:await browser.version(),checks,artifact:'/tmp/sandhai-phase2-browser.png'},null,2));
+    console.log(JSON.stringify({result:'PASS',browser:await browser.version(),checks,artifact:path.join(artifactRoot,'sandhai-phase2-browser.png')},null,2));
   } catch(error) {
-    if(page){await page.screenshot({path:'/tmp/sandhai-phase2-browser-failure.png'}).catch(()=>{});console.error('Visible semantics:',(await page.locator('body').innerText().catch(()=>'' )).slice(0,2500));console.error('Textbox count:',await page.getByRole('textbox').count().catch(()=>-1));}
+    if(page){await page.screenshot({path:path.join(artifactRoot,'sandhai-phase2-browser-failure.png')}).catch(()=>{});console.error('Visible semantics:',(await page.locator('body').innerText().catch(()=>'' )).slice(0,2500));console.error('Textbox count:',await page.getByRole('textbox').count().catch(()=>-1));}
     throw error;
   } finally {
     // Restore the original policy even if the deliberate rejection check failed.

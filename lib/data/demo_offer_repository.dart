@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:typed_data';
 
 import '../models/offer_model.dart';
@@ -28,7 +29,14 @@ class DemoOfferRepository implements OfferRepository {
     String id,
     Uint8List bytes,
     String filename,
-  ) async => const UploadedImage('', '');
+  ) async => UploadedImage(
+    'offers/$uid/$id/$filename',
+    'data:image/${filename.endsWith('.png')
+        ? 'png'
+        : filename.endsWith('.webp')
+        ? 'webp'
+        : 'jpeg'};base64,${base64Encode(bytes)}',
+  );
   @override
   Future<void> deleteUpload(UploadedImage image) async {}
   @override

@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import '../core/utils/geohash_utils.dart';
+import '../core/location/store_location.dart';
 import '../models/user_model.dart';
 import '../models/vendor_model.dart';
 import 'account_repository.dart';
@@ -97,16 +97,27 @@ class DemoAccountRepository implements AccountRepository {
           category: data.category,
           address: data.address,
           description: data.description,
-          latitude: data.latitude,
-          longitude: data.longitude,
-          geohash:
-              data.geohash ??
-              GeohashUtils.encode(data.latitude, data.longitude),
           createdAt: DateTime.now(),
         ),
       );
     }
     _profiles.add(null);
+  }
+
+  @override
+  Future<VendorModel> confirmLocation(
+    String uid,
+    StoreLocation location,
+  ) async {
+    final updated = vendors[uid]!.copyWith(
+      latitude: location.latitude,
+      longitude: location.longitude,
+      geohash: location.geohash,
+      locationConfirmedAt: DateTime.now(),
+    );
+    vendors[uid] = updated;
+    _profiles.add(null);
+    return updated;
   }
 
   @override

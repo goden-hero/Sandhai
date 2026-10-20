@@ -1,5 +1,8 @@
+import 'package:sandhai/core/location/store_location.dart';
+
+import 'support/phase3_fixtures.dart';
+
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sandhai/core/errors/app_failure.dart';
@@ -10,6 +13,8 @@ import 'package:sandhai/features/vendor/services/offer_service.dart';
 import 'support/fakes.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  installDraftFakes();
   late TestAccounts accounts;
   late AuthService auth;
   setUp(() {
@@ -26,7 +31,7 @@ void main() {
       password: 'password',
       storeName: 'My store',
       phone: '9876543210',
-      category: 'Groceries',
+      category: 'groceries',
     );
     await settleSession();
     return u.uid;
@@ -77,6 +82,7 @@ void main() {
       await settleSession();
       expect(auth.profile!.uid, uid);
       expect(auth.profile!.isPendingVendor, isTrue);
+      await auth.confirmStoreLocation(StoreLocation(13.0827, 80.2707));
       accounts.approval(uid, 'approved');
       await settleSession();
       expect(auth.profile!.isApprovedVendor, isTrue);
@@ -91,6 +97,7 @@ void main() {
   );
   test('completion does not change an existing role or approval', () async {
     final uid = await vendor();
+    await auth.confirmStoreLocation(StoreLocation(13.0827, 80.2707));
     accounts.approval(uid, 'approved');
     await settleSession();
     await auth.completeRegistration(
@@ -115,7 +122,7 @@ void main() {
           uid: uid,
           name: 'Not saved',
           phone: '9876543210',
-          category: 'Groceries',
+          category: 'groceries',
         ),
         throwsA(isA<AppFailure>()),
       );
@@ -181,6 +188,7 @@ void main() {
     late OfferService service;
     setUp(() async {
       final uid = await vendor();
+      await auth.confirmStoreLocation(StoreLocation(13.0827, 80.2707));
       accounts.approval(uid, 'approved');
       await settleSession();
       offers = TestOffers();
@@ -192,9 +200,9 @@ void main() {
       description: 'Details',
       oldPrice: 100,
       newPrice: 50,
-      category: 'Groceries',
+      category: 'groceries',
       durationHours: 6,
-      imageBytes: image ? Uint8List.fromList([1, 2, 3]) : null,
+      imageBytes: image ? testPng : null,
       imageFileName: 'test.jpg',
     );
     test('a pending save is never treated as a confirmed offer', () async {

@@ -114,7 +114,7 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
     assert.strictEqual(offerServiceContent.includes('createOffer'), true);
     assert.strictEqual(offerServiceContent.includes('isApprovedVendor'), true);
     assert.strictEqual(offerServiceContent.includes('Clearance price'), true);
-    assert.strictEqual(offerRepositoryContent.includes('offers/$uid/$id/$safeName'), true);
+    assert.strictEqual(offerRepositoryContent.includes('offers/$uid/$id/${image.filename}'), true);
   });
 
   await t.test('12. CreateOfferScreen provides form validation, category selection, price checks, and image preview', () => {
@@ -125,7 +125,7 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
     assert.strictEqual(createOfferContent.includes('Post Clearance Offer'), true);
     assert.strictEqual(createOfferContent.includes('Must be <= ₹'), true);
     assert.strictEqual(createOfferContent.includes('_selectedCategory'), true);
-    assert.strictEqual(createOfferContent.includes('_pickSampleImage'), true);
+    assert.strictEqual(createOfferContent.includes('_pickImage'), true);
     assert.strictEqual(createOfferContent.includes('Publish Locked (Store Approval Pending)'), true);
   });
 

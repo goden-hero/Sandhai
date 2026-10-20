@@ -1,4 +1,7 @@
-import 'dart:typed_data';
+import '../../../core/images/offer_draft_store.dart';
+import '../../../core/images/image_selection_service.dart';
+import '../../../core/images/selected_image.dart';
+import '../../../core/location/store_location_editor.dart';
 
 import 'package:flutter/material.dart';
 
@@ -11,7 +14,9 @@ import '../../auth/services/auth_service.dart';
 import '../services/offer_service.dart';
 
 class CreateOfferScreen extends StatefulWidget {
-  const CreateOfferScreen({super.key});
+  const CreateOfferScreen({super.key, this.recoveredImage, this.draft});
+  final SelectedImage? recoveredImage;
+  final Map<String, dynamic>? draft;
 
   @override
   State<CreateOfferScreen> createState() => _CreateOfferScreenState();
@@ -23,16 +28,14 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   final _descController = TextEditingController();
   final _oldPriceController = TextEditingController();
   final _newPriceController = TextEditingController();
-  String _selectedCategory = 'Groceries';
+  String _selectedCategory = 'groceries';
   String _selectedDuration = '6 Hours';
 
   bool _isSubmitting = false;
   String? _errorMessage;
 
-  // Selected image state
-  Uint8List? _selectedImageBytes;
-  String? _selectedImageName;
-  bool _hasSelectedImage = false;
+  SelectedImage? _image;
+  bool _picking = false;
 
   UserModel get _currentVendorUser => AuthService.instance.profile!;
   late final String _offerId;
@@ -40,7 +43,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
   @override
   void initState() {
     super.initState();
-    _offerId = OfferService.instance.newOfferId();
+    final draft = widget.draft;
+    _offerId = draft?['id'] as String? ?? OfferService.instance.newOfferId();
+    if (draft != null) {
+      _titleController.text = draft['title'] as String? ?? '';
+      _descController.text = draft['description'] as String? ?? '';
+      _oldPriceController.text = draft['oldPrice'] as String? ?? '';
+      _newPriceController.text = draft['newPrice'] as String? ?? '';
+      _selectedCategory = OfferCategories.normalize(draft['category']);
+      _selectedDuration = draft['duration'] as String? ?? '6 Hours';
+    }
+    _image = widget.recoveredImage;
   }
 
   @override
@@ -69,30 +82,38 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
     }
   }
 
-  void _pickSampleImage() {
-    if (!AuthService.instance.isDemo) return;
-    setState(() {
-      _selectedImageBytes = Uint8List.fromList(
-        List.generate(1024, (i) => i % 256),
-      );
-      _selectedImageName =
-          'clearance_item_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      _hasSelectedImage = true;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('📷 Offer image attached successfully!'),
-        duration: Duration(seconds: 1),
-      ),
-    );
-  }
+  Future<void> _retainDraft(String uid) => OfferDraftStore.instance.save(uid, {
+    'id': _offerId,
+    'title': _titleController.text,
+    'description': _descController.text,
+    'oldPrice': _oldPriceController.text,
+    'newPrice': _newPriceController.text,
+    'category': _selectedCategory,
+    'duration': _selectedDuration,
+  });
 
-  void _removeSelectedImage() {
+  Future<void> _pickImage() async {
+    final uid = AuthService.instance.identity!.uid;
     setState(() {
-      _selectedImageBytes = null;
-      _selectedImageName = null;
-      _hasSelectedImage = false;
+      _picking = true;
+      _errorMessage = null;
     });
+    try {
+      await _retainDraft(uid);
+      await OfferDraftStore.instance.markPicker(uid);
+      final selected = await ImageSelectionService.instance.pick();
+      await OfferDraftStore.instance.clearPicker();
+      AuthService.instance.requireAccount(uid);
+      if (mounted && selected != null) setState(() => _image = selected);
+      // Cancellation leaves the previous selection and form untouched.
+    } catch (e) {
+      if (mounted) {
+        setState(() => _errorMessage = errorMessage(e));
+        showOperationError(context, _errorMessage!);
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
   }
 
   Future<void> _handlePublishOffer() async {
@@ -124,6 +145,8 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
       final newPrice = double.parse(_newPriceController.text.trim());
       final durationHours = _parseDurationHours(_selectedDuration);
 
+      final uid = AuthService.instance.identity!.uid;
+      await _retainDraft(uid);
       await OfferService.instance.createOffer(
         offerId: _offerId,
         onProgress: (message) {
@@ -135,10 +158,17 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
         newPrice: newPrice,
         category: _selectedCategory,
         durationHours: durationHours,
-        imageBytes: _selectedImageBytes,
-        imageFileName: _selectedImageName,
+        imageBytes: _image?.bytes,
+        imageFileName: _image?.filename,
       );
 
+      // Publication is already confirmed; a local draft-removal failure must
+      // not turn a confirmed server save into an apparent failure.
+      try {
+        await OfferDraftStore.instance.clear(uid);
+      } catch (_) {
+        /* A resumed same-ID draft reconciles to the saved offer. */
+      }
       if (!mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -346,12 +376,19 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                 ),
                 items: availableCategories
                     .map(
-                      (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                      (cat) => DropdownMenuItem(
+                        value: cat,
+                        child: Text(OfferCategories.label(cat)),
+                      ),
                     )
                     .toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedCategory = val);
-                },
+                onChanged: _isSubmitting
+                    ? null
+                    : (val) {
+                        if (val != null) {
+                          setState(() => _selectedCategory = val);
+                        }
+                      },
               ),
               const SizedBox(height: 16),
 
@@ -452,9 +489,13 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                       (dur) => DropdownMenuItem(value: dur, child: Text(dur)),
                     )
                     .toList(),
-                onChanged: (val) {
-                  if (val != null) setState(() => _selectedDuration = val);
-                },
+                onChanged: _isSubmitting
+                    ? null
+                    : (val) {
+                        if (val != null) {
+                          setState(() => _selectedDuration = val);
+                        }
+                      },
               ),
               const SizedBox(height: 16),
 
@@ -463,125 +504,60 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                   padding: const EdgeInsets.all(8),
                   child: Text(_progress),
                 ),
-              if (!AuthService.instance.isDemo)
-                const Text(
-                  'Image selection will be added in a later phase. Offers can be saved without an image.',
-                ),
-              // Image Selection & Attachment Box
               const Text(
-                'Offer Image (Optional / Max 5MB)',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                'Offer photo (optional): JPEG, PNG, or WebP; up to 5 MiB and 40 megapixels.',
               ),
-              const SizedBox(height: 6),
-              if (_hasSelectedImage) ...[
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.green.shade50,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade300),
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 50,
-                        height: 50,
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary
-                              .withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.image,
-                          color: Theme.of(context).colorScheme.primary,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _selectedImageName ?? 'clearance_item.jpg',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const Text(
-                              'JPG Image Attached (Ready to Upload)',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.green,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.refresh, color: Colors.blue),
-                        tooltip: 'Replace Image',
-                        onPressed: AuthService.instance.isDemo
-                            ? _pickSampleImage
-                            : null,
-                      ),
-                      IconButton(
-                        icon: const Icon(
-                          Icons.delete_outline,
-                          color: Colors.red,
-                        ),
-                        tooltip: 'Remove Image',
-                        onPressed: _removeSelectedImage,
-                      ),
-                    ],
-                  ),
+              if (_image != null) ...[
+                Image.memory(
+                  _image!.bytes,
+                  height: 180,
+                  fit: BoxFit.contain,
+                  semanticLabel: 'Selected offer photo preview',
                 ),
-              ] else ...[
-                InkWell(
-                  onTap: AuthService.instance.isDemo ? _pickSampleImage : null,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Container(
-                    height: 110,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                      color: Colors.grey.shade100,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: Colors.grey.shade400,
-                        style: BorderStyle.solid,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.add_a_photo_outlined,
-                          size: 36,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap to attach product image',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade700,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+                Text('${_image!.contentType} • ${_image!.bytes.length} bytes'),
+                TextButton(
+                  onPressed: _isSubmitting || _picking
+                      ? null
+                      : () => setState(() => _image = null),
+                  child: const Text('Remove photo'),
                 ),
               ],
+              OutlinedButton.icon(
+                onPressed: _isSubmitting || _picking ? null : _pickImage,
+                icon: const Icon(Icons.photo_library_outlined),
+                label: Text(_picking ? 'Opening photos…' : 'Choose photo'),
+              ),
+              if (_errorMessage != null)
+                Text(
+                  _errorMessage!,
+                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                ),
               const SizedBox(height: 32),
 
+              if (AuthService.instance.vendorProfile?.hasConfirmedLocation !=
+                  true) ...[
+                const Text('Confirm your store location before publishing.'),
+                OutlinedButton(
+                  onPressed: _isSubmitting
+                      ? null
+                      : () async {
+                          await Navigator.push<bool>(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const StoreLocationEditor(),
+                            ),
+                          );
+                          if (mounted) setState(() {});
+                        },
+                  child: const Text('Confirm store location'),
+                ),
+              ],
               // Submit Action Button
               SizedBox(
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: (!isApproved || _isSubmitting)
+                  onPressed: (!isApproved || _isSubmitting || _picking)
                       ? null
                       : _handlePublishOffer,
                   icon: Icon(

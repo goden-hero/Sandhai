@@ -1,3 +1,10 @@
+import '../../../core/widgets/offer_photo.dart';
+import '../../../core/images/image_selection_service.dart';
+import '../../../core/images/offer_draft_store.dart';
+import '../../../core/images/selected_image.dart';
+import '../../../core/constants/offer_categories.dart';
+import 'create_offer_screen.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../app/router.dart';
@@ -15,10 +22,57 @@ class VendorDashboardScreen extends StatefulWidget {
 
 class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
   late Stream<List<OfferModel>> _offers;
+  SelectedImage? _recovered;
+  Map<String, dynamic>? _draft;
+  String? _recoveryError;
   @override
   void initState() {
     super.initState();
     _subscribe();
+    _recover();
+  }
+
+  Future<void> _recover() async {
+    final uid = AuthService.instance.identity!.uid;
+    try {
+      final draft = await OfferDraftStore.instance.read(uid);
+      final pickerOwner = await OfferDraftStore.instance.pickerOwner();
+      // Never consume another account's pending Android picker result.
+      final image = pickerOwner == uid
+          ? await ImageSelectionService.instance.recover()
+          : null;
+      if (pickerOwner == uid) await OfferDraftStore.instance.clearPicker();
+      AuthService.instance.requireAccount(uid);
+      if (!mounted) return;
+      setState(() {
+        _draft = draft;
+        _recovered = image;
+      });
+    } catch (e) {
+      if (mounted) {
+        setState(
+          () => _recoveryError =
+              'Draft/photo recovery failed: ${errorMessage(e)}',
+        );
+      }
+    }
+  }
+
+  Future<void> _resumeDraft() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            CreateOfferScreen(recoveredImage: _recovered, draft: _draft),
+      ),
+    );
+    if (mounted) {
+      setState(() {
+        _recovered = null;
+        _draft = null;
+      });
+      await _recover();
+    }
   }
 
   void _subscribe() {
@@ -69,7 +123,17 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: approved
-              ? () => Navigator.pushNamed(context, AppRoutes.createOffer)
+              ? () async {
+                  await _recover();
+                  if (!mounted) return;
+                  if (_draft != null || _recovered != null) {
+                    await _resumeDraft();
+                  } else {
+                    if (!context.mounted) return;
+                    await Navigator.pushNamed(context, AppRoutes.createOffer);
+                    if (mounted) await _recover();
+                  }
+                }
               : null,
           icon: const Icon(Icons.add),
           label: Text(approved ? 'Post Clearance Offer' : 'Approval required'),
@@ -96,6 +160,23 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                 ),
               ),
             ),
+            if (_recoveryError != null)
+              Text(
+                _recoveryError!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+            if (_recovered != null || _draft != null)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: OutlinedButton(
+                  onPressed: _resumeDraft,
+                  child: Text(
+                    _recovered != null
+                        ? 'Recover selected photo and draft'
+                        : 'Resume unsaved offer',
+                  ),
+                ),
+              ),
             Expanded(
               child: StreamBuilder<List<OfferModel>>(
                 stream: _offers,
@@ -162,9 +243,12 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                       ...vendorOffers.map(
                         (offer) => Card(
                           child: ListTile(
+                            leading: offer.imageUrl.isEmpty
+                                ? null
+                                : OfferPhoto(url: offer.imageUrl),
                             title: Text(offer.title),
                             subtitle: Text(
-                              '${offer.status} • ₹${offer.newPrice.toStringAsFixed(2)}',
+                              '${offer.status} • ${OfferCategories.label(offer.category)} • ₹${offer.newPrice.toStringAsFixed(2)}',
                             ),
                             trailing: const Icon(Icons.cloud_done_outlined),
                           ),

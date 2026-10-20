@@ -22,7 +22,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _confirmPasswordController = TextEditingController();
-  String _selectedCategory = 'Groceries';
+  String _selectedCategory = 'groceries';
   bool _isLoading = false;
   String? _errorMessage;
 
@@ -207,7 +207,10 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
                 ),
                 items: availableCategories
                     .map(
-                      (cat) => DropdownMenuItem(value: cat, child: Text(cat)),
+                      (cat) => DropdownMenuItem(
+                        value: cat,
+                        child: Text(OfferCategories.label(cat)),
+                      ),
                     )
                     .toList(),
                 onChanged: (val) {

@@ -1,3 +1,5 @@
+import '../../../core/location/store_location_editor.dart';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/constants/offer_categories.dart';
@@ -18,7 +20,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
       _phoneController = TextEditingController(),
       _addressController = TextEditingController(),
       _descriptionController = TextEditingController();
-  String _category = 'Groceries';
+  String _category = 'groceries';
   bool _isLoading = true, _isEditing = false, _isSaving = false, _dirty = false;
   String? _error;
   VendorModel? _vendor;
@@ -42,9 +44,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
     _phoneController.text = vendor.phone;
     _addressController.text = vendor.address ?? '';
     _descriptionController.text = vendor.description ?? '';
-    _category = OfferCategories.values.contains(vendor.category)
-        ? vendor.category
-        : 'Groceries';
+    _category = OfferCategories.normalize(vendor.category);
   }
 
   Future<void> _load() async {
@@ -189,6 +189,29 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                       ),
                       Text(user.email),
                       const SizedBox(height: 16),
+                      if (vendor != null && !_isEditing) ...[
+                        Text(
+                          vendor.hasConfirmedLocation
+                              ? 'Confirmed store: ${vendor.latitude}, ${vendor.longitude}'
+                              : 'Store location needs confirmation before publishing.',
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _isSaving
+                              ? null
+                              : () async {
+                                  final saved = await Navigator.push<bool>(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          const StoreLocationEditor(),
+                                    ),
+                                  );
+                                  if (saved == true) await _load();
+                                },
+                          icon: const Icon(Icons.location_on_outlined),
+                          label: const Text('Confirm / edit store location'),
+                        ),
+                      ],
                       if (_error != null)
                         Padding(
                           padding: const EdgeInsets.symmetric(vertical: 12),
@@ -231,7 +254,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                                     .map(
                                       (c) => DropdownMenuItem(
                                         value: c,
-                                        child: Text(c),
+                                        child: Text(OfferCategories.label(c)),
                                       ),
                                     )
                                     .toList(),
@@ -291,7 +314,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                       if (!_isEditing && vendor != null) ...[
                         Text(vendor.name, style: const TextStyle(fontSize: 24)),
                         Text(vendor.phone),
-                        Text(vendor.category),
+                        Text(OfferCategories.label(vendor.category)),
                         Text(vendor.address ?? ''),
                         Text(vendor.description ?? ''),
                       ],

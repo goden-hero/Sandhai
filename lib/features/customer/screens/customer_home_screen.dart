@@ -69,30 +69,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
       // 2. Category Filter
       if (_selectedCategory == 'All') return true;
 
-      final catLower = _selectedCategory.toLowerCase();
-      final titleLower = offer.title.toLowerCase();
-      final descLower = offer.description.toLowerCase();
-
-      if (catLower.contains('groceries') &&
-          (titleLower.contains('rice') || descLower.contains('rice'))) {
-        return true;
-      }
-      if (catLower.contains('produce') &&
-          (titleLower.contains('mango') || titleLower.contains('fruit'))) {
-        return true;
-      }
-      if (catLower.contains('bakery') &&
-          (titleLower.contains('bread') ||
-              titleLower.contains('pastr') ||
-              titleLower.contains('milk'))) {
-        return true;
-      }
-      if (catLower.contains('snacks') &&
-          (titleLower.contains('snack') || descLower.contains('beverage'))) {
-        return true;
-      }
-
-      return titleLower.contains(catLower) || descLower.contains(catLower);
+      return offer.category == _selectedCategory;
     }).toList();
   }
 
@@ -204,7 +181,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                         final cat = OfferCategories.values[index];
                         final isSelected = cat == _selectedCategory;
                         return ChoiceChip(
-                          label: Text(cat),
+                          label: Text(OfferCategories.label(cat)),
                           selected: isSelected,
                           onSelected: (_) =>
                               setState(() => _selectedCategory = cat),

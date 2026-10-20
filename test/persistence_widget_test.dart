@@ -1,3 +1,7 @@
+import 'package:sandhai/core/location/store_location.dart';
+
+import 'support/phase3_fixtures.dart';
+
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,6 +16,7 @@ import 'package:sandhai/features/vendor/services/offer_service.dart';
 import 'support/fakes.dart';
 
 void main() {
+  installDraftFakes();
   testWidgets(
     'Firebase-mode customer screens contain no sample offers or settings',
     (tester) async {
@@ -58,7 +63,7 @@ void main() {
         password: 'password',
         storeName: 'Original',
         phone: '9876543210',
-        category: 'Groceries',
+        category: 'groceries',
       );
       await tester.pumpWidget(const SandhaiApp());
       await tester.pumpAndSettle();
@@ -114,11 +119,14 @@ void main() {
         password: 'password',
         storeName: 'Store',
         phone: '9876543210',
-        category: 'Groceries',
+        category: 'groceries',
       );
+      await auth.confirmStoreLocation(StoreLocation(13.0827, 80.2707));
       repo.approval(user.uid, 'approved');
       await tester.pump();
-      final offers = TestOffers()..failSave = true;
+      final offers = TestOffers()
+        ..failSave = true
+        ..saveGate = Completer<void>();
       OfferService.install(OfferService(auth: auth, repository: offers));
       await tester.pumpWidget(const SandhaiApp());
       await tester.pumpAndSettle();
@@ -136,6 +144,17 @@ void main() {
       );
       await tester.ensureVisible(button);
       await tester.tap(button);
+      await tester.pumpAndSettle();
+      expect(
+        tester
+            .widgetList<DropdownButtonFormField<String>>(
+              find.byType(DropdownButtonFormField<String>),
+            )
+            .every((field) => field.onChanged == null),
+        isTrue,
+        reason: 'Category and duration must not change after the pending request captures their values.',
+      );
+      offers.saveGate!.complete();
       await tester.pumpAndSettle();
       expect(
         find.descendant(
@@ -172,8 +191,9 @@ void main() {
         password: 'password',
         storeName: 'Store A',
         phone: '9876543210',
-        category: 'Groceries',
+        category: 'groceries',
       );
+      await auth.confirmStoreLocation(StoreLocation(13.0827, 80.2707));
       accounts.approval(a.uid, 'approved');
       await tester.pump();
       final offers = TestOffers();
@@ -185,7 +205,7 @@ void main() {
         description: 'A',
         oldPrice: 100,
         newPrice: 50,
-        category: 'Groceries',
+        category: 'groceries',
         durationHours: 6,
       );
       await tester.pumpWidget(const SandhaiApp());
@@ -201,7 +221,7 @@ void main() {
         password: 'password',
         storeName: 'Store B',
         phone: '9876543210',
-        category: 'Groceries',
+        category: 'groceries',
       );
       await tester.pumpAndSettle();
       expect(find.text('Store B'), findsOneWidget);

@@ -1,3 +1,5 @@
+import '../../../core/location/store_location.dart';
+
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
@@ -213,9 +215,6 @@ class AuthService extends ChangeNotifier {
     required String category,
     String address = '',
     String description = '',
-    double latitude = 13.0827,
-    double longitude = 80.2707,
-    String? geohash,
   }) => _register(
     email,
     password,
@@ -226,9 +225,6 @@ class AuthService extends ChangeNotifier {
       category: category,
       address: address,
       description: description,
-      latitude: latitude,
-      longitude: longitude,
-      geohash: geohash,
     ),
   );
 
@@ -298,6 +294,14 @@ class AuthService extends ChangeNotifier {
     } finally {
       _formOperation = false;
     }
+  }
+
+  Future<VendorModel> confirmStoreLocation(StoreLocation location) async {
+    final uid = identity!.uid;
+    requireAccount(uid);
+    final result = await repository.confirmLocation(uid, location);
+    requireAccount(uid);
+    return result;
   }
 
   Future<VendorModel> updateVendorProfile({

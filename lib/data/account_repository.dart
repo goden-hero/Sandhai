@@ -1,3 +1,4 @@
+import '../core/location/store_location.dart';
 import '../models/user_model.dart';
 import '../models/vendor_model.dart';
 
@@ -12,16 +13,11 @@ class RegistrationData {
     required this.name,
     required this.role,
     this.phone = '',
-    this.category = 'Groceries',
+    this.category = 'groceries',
     this.address = '',
     this.description = '',
-    this.latitude = 13.0827,
-    this.longitude = 80.2707,
-    this.geohash,
   });
   final String name, role, phone, category, address, description;
-  final double latitude, longitude;
-  final String? geohash;
 }
 
 abstract class AccountRepository {
@@ -38,6 +34,7 @@ abstract class AccountRepository {
     AccountIdentity identity,
     RegistrationData data,
   );
+  Future<VendorModel> confirmLocation(String uid, StoreLocation location);
   Future<VendorModel> updateVendor(
     String uid, {
     required String name,

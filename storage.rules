@@ -11,39 +11,30 @@ service firebase.storage {
         && firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.approvalStatus == 'approved';
     }
 
-    // --- OFFER IMAGES ---
-    // Path structure: offers/{vendorId}/{filename}
-    match /offers/{vendorId}/{fileName} {
-      // Public read access so customers can view offer images
-      allow read: if true;
-      // Owners can clean up their own uploads even after approval is revoked.
-      allow delete: if request.auth != null && request.auth.uid == vendorId;
-
-      // Upload/write rules:
-      // 1. Must be authenticated
-      // 2. Authenticated UID must match the vendorId in the path
-      // 3. Must be an approved vendor in Firestore (pending vendors & customers blocked)
-      // 4. Must be an image MIME type (png, jpeg, jpg, webp)
-      // 5. File size must be <= 5MB (5,242,880 bytes)
-      allow create, update: if request.auth != null
-        && request.auth.uid == vendorId
-        && isApprovedVendor()
-        && request.resource.contentType.matches('image/(png|jpeg|jpg|webp)')
-        && request.resource.size <= 5 * 1024 * 1024;
+    function owner(vendorId) { return request.auth != null && request.auth.uid == vendorId; }
+    function validUpload(fileName) {
+      return request.resource.size > 0 && request.resource.size <= 5 * 1024 * 1024
+        && ((request.resource.contentType == 'image/jpeg' && fileName.matches('.*\\.(jpg|jpeg)'))
+          || (request.resource.contentType == 'image/png' && fileName.matches('.*\\.png'))
+          || (request.resource.contentType == 'image/webp' && fileName.matches('.*\\.webp')));
     }
-
-    // Path structure with offerId: offers/{vendorId}/{offerId}/{filename}
+    // Legacy images remain readable and owners retain cleanup authorization.
+    match /offers/{vendorId}/{fileName} {
+      allow read: if true;
+      allow delete: if owner(vendorId);
+      allow create, update: if owner(vendorId) && isApprovedVendor() && validUpload(fileName);
+    }
     match /offers/{vendorId}/{offerId}/{fileName} {
       allow read: if true;
-      // Owners can clean up their own uploads even after approval is revoked.
-      allow delete: if request.auth != null && request.auth.uid == vendorId;
-
-      allow create, update: if request.auth != null
-        && request.auth.uid == vendorId
-        && isApprovedVendor()
-        && request.resource.contentType.matches('image/(png|jpeg|jpg|webp)')
-        && request.resource.size <= 5 * 1024 * 1024;
+      // Deletion has no request.resource (unlike upload). Allow orphan cleanup
+      // after approval revocation, but protect the exact published reference.
+      allow delete: if owner(vendorId)
+        && (!firestore.exists(/databases/(default)/documents/offers/$(offerId))
+          || firestore.get(/databases/(default)/documents/offers/$(offerId)).data.get('imagePath', '') != 'offers/' + vendorId + '/' + offerId + '/' + fileName);
+      allow create, update: if owner(vendorId) && isApprovedVendor() && validUpload(fileName)
+        && (resource == null || (request.resource.contentType == resource.contentType
+          && request.resource.size == resource.size
+          && request.resource.md5Hash == resource.md5Hash));
     }
   }
 }
-

@@ -283,6 +283,15 @@ def main():
         phone.absent(offer_b)
 
     def post_offer(uid, title):
+        # Phase 3 requires explicit confirmation even for Phase 2 persistence
+        # fixtures. This deterministic coordinate is test data, not a GPS claim.
+        phone.tap('Business profile'); phone.wait('Vendor Profile')
+        phone.tap('Confirm / edit store location'); phone.wait('Confirm store location')
+        phone.fill('Store latitude', '13.0827', field_index=0)
+        phone.fill('Store longitude', '80.2707', field_index=1)
+        phone.tap('I confirm this is my store location')
+        phone.tap('Save confirmed location'); phone.wait('Vendor Profile')
+        phone.tap('Back'); phone.wait('Your offers')
         phone.tap('Post Clearance Offer')
         phone.wait('Offer Title')
         for label, value in [('Offer Title', title),

@@ -18,12 +18,12 @@ class GeohashUtils {
     double longitude, {
     int precision = defaultPrecision,
   }) {
-    if (latitude < -90.0 || latitude > 90.0) {
+    if (!latitude.isFinite || latitude < -90.0 || latitude > 90.0) {
       throw ArgumentError(
         'Latitude must be between -90.0 and 90.0 degrees, got: $latitude',
       );
     }
-    if (longitude < -180.0 || longitude > 180.0) {
+    if (!longitude.isFinite || longitude < -180.0 || longitude > 180.0) {
       throw ArgumentError(
         'Longitude must be between -180.0 and 180.0 degrees, got: $longitude',
       );
@@ -81,7 +81,7 @@ class GeohashUtils {
   /// Rejects nulls, out-of-bound values, and uninitialized (0.0, 0.0) positions.
   static bool isValidLocation(double? lat, double? lng) {
     if (lat == null || lng == null) return false;
-    if (lat == 0.0 && lng == 0.0) return false;
+    if (!lat.isFinite || !lng.isFinite) return false;
     return lat >= -90.0 && lat <= 90.0 && lng >= -180.0 && lng <= 180.0;
   }
 }

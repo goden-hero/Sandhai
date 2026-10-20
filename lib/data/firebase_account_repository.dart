@@ -2,7 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../core/errors/app_failure.dart';
-import '../core/utils/geohash_utils.dart';
+import '../core/location/store_location.dart';
 import '../models/user_model.dart';
 import '../models/vendor_model.dart';
 import 'account_repository.dart';
@@ -110,11 +110,6 @@ class FirebaseAccountRepository implements AccountRepository {
             category: data.category,
             address: data.address.trim(),
             description: data.description.trim(),
-            latitude: data.latitude,
-            longitude: data.longitude,
-            geohash:
-                data.geohash ??
-                GeohashUtils.encode(data.latitude, data.longitude),
             createdAt: now,
           ).toFirestore(),
         );
@@ -123,6 +118,28 @@ class FirebaseAccountRepository implements AccountRepository {
       // during completion. In particular a retry never resets an approved vendor.
     });
   }
+
+  @override
+  Future<VendorModel> confirmLocation(String uid, StoreLocation location) =>
+      _db.runTransaction((tx) async {
+        final ref = _db.collection('vendors').doc(uid);
+        final doc = await tx.get(ref);
+        if (!doc.exists) {
+          throw const AppFailure('Complete your store profile first.');
+        }
+        final updated = VendorModel.fromFirestore(doc).copyWith(
+          latitude: location.latitude,
+          longitude: location.longitude,
+          geohash: location.geohash,
+          locationConfirmedAt: DateTime.now(),
+        );
+        tx.set(ref, {
+          ...updated.toFirestore(),
+          'locationConfirmedAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        return updated;
+      });
 
   @override
   Future<VendorModel> updateVendor(

@@ -1,3 +1,5 @@
+import '../core/constants/offer_categories.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class OfferModel {
@@ -8,8 +10,11 @@ class OfferModel {
   final double oldPrice;
   final double newPrice;
   final String imageUrl;
-  final double latitude;
-  final double longitude;
+  final String category;
+  final String? imagePath, imageContentType;
+  final double? imageSize;
+  final double? latitude;
+  final double? longitude;
   final String geohash;
   final DateTime createdAt;
   final DateTime expiryTime;
@@ -23,6 +28,10 @@ class OfferModel {
     required this.oldPrice,
     required this.newPrice,
     required this.imageUrl,
+    this.category = 'other',
+    this.imagePath,
+    this.imageContentType,
+    this.imageSize,
     required this.latitude,
     required this.longitude,
     required this.geohash,
@@ -31,18 +40,23 @@ class OfferModel {
     required this.status,
   });
 
-  factory OfferModel.fromFirestore(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
+  factory OfferModel.fromFirestore(DocumentSnapshot doc) =>
+      OfferModel.fromMap(doc.id, doc.data() as Map<String, dynamic>? ?? {});
+  factory OfferModel.fromMap(String id, Map<String, dynamic> data) {
     return OfferModel(
-      id: doc.id,
+      id: id,
       vendorId: data['vendorId'] ?? '',
       title: data['title'] ?? '',
       description: data['description'] ?? '',
       oldPrice: (data['oldPrice'] as num?)?.toDouble() ?? 0.0,
       newPrice: (data['newPrice'] as num?)?.toDouble() ?? 0.0,
       imageUrl: data['imageUrl'] ?? '',
-      latitude: (data['latitude'] as num?)?.toDouble() ?? 0.0,
-      longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
+      category: OfferCategories.normalize(data['category']),
+      imagePath: data['imagePath'],
+      imageContentType: data['imageContentType'],
+      imageSize: (data['imageSize'] as num?)?.toDouble(),
+      latitude: (data['latitude'] as num?)?.toDouble(),
+      longitude: (data['longitude'] as num?)?.toDouble(),
       geohash: data['geohash'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
       expiryTime:
@@ -60,6 +74,10 @@ class OfferModel {
       'oldPrice': oldPrice,
       'newPrice': newPrice,
       'imageUrl': imageUrl,
+      'category': OfferCategories.normalize(category),
+      if (imagePath != null) 'imagePath': imagePath,
+      if (imageContentType != null) 'imageContentType': imageContentType,
+      if (imageSize != null) 'imageSize': imageSize!.toInt(),
       'latitude': latitude,
       'longitude': longitude,
       'geohash': geohash,
