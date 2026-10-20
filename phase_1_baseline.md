@@ -2,6 +2,11 @@
 
 Date: 2026-10-20
 
+Subsequent device confirmation from the user: demo launch verified on
+Samsung SM J810GF, Android 10 / API 29. The automated checks below retain their
+original Phase 1 results; Phase 2 device authentication/persistence was not covered
+by that demo-only confirmation.
+
 ## Implementation
 
 - Pin Flutter 3.47.5 stable (Dart 3.13.4) through `.fvmrc`, pubspec minimums,

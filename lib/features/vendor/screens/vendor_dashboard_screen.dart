@@ -31,9 +31,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
     try {
       await AuthService.instance.signOut();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(errorMessage(e))));
+      }
     }
   }
 
@@ -99,7 +100,7 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
               child: StreamBuilder<List<OfferModel>>(
                 stream: _offers,
                 builder: (context, snapshot) {
-                  if (snapshot.hasError)
+                  if (snapshot.hasError) {
                     return Center(
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
@@ -115,8 +116,10 @@ class _VendorDashboardScreenState extends State<VendorDashboardScreen> {
                         ],
                       ),
                     );
-                  if (!snapshot.hasData)
+                  }
+                  if (!snapshot.hasData) {
                     return const Center(child: CircularProgressIndicator());
+                  }
                   final vendorOffers = snapshot.data!;
                   return ListView(
                     padding: const EdgeInsets.all(16),

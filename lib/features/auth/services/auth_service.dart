@@ -57,8 +57,9 @@ class AuthService extends ChangeNotifier {
 
   void setDemoUser(UserModel? user) {
     final repo = repository;
-    if (repo is! DemoAccountRepository)
+    if (repo is! DemoAccountRepository) {
       throw const AppFailure('Demo users are disabled in Firebase modes.');
+    }
     repo.setUser(user);
   }
 
@@ -76,8 +77,11 @@ class AuthService extends ChangeNotifier {
   }
 
   void _attach(AccountIdentity? next, {bool force = false}) {
-    if (!force && next?.uid == identity?.uid && phase != SessionPhase.loading)
+    if (!force &&
+        next?.uid == identity?.uid &&
+        (next != null || phase != SessionPhase.loading)) {
       return;
+    }
     final previous = identity?.uid;
     final epoch = ++_generation;
     unawaited(_userSub?.cancel());
@@ -89,8 +93,9 @@ class AuthService extends ChangeNotifier {
     vendorProfile = null;
     _vendorKnown = false;
     sessionError = null;
-    if (!_formOperation || (previous != null && previous != next?.uid))
+    if (!_formOperation || (previous != null && previous != next?.uid)) {
       routeEpoch++;
+    }
     if (next == null) {
       phase = SessionPhase.signedOut;
       _notify();
@@ -128,7 +133,13 @@ class AuthService extends ChangeNotifier {
   }
 
   void _derive() {
-    sessionError = null;
+    // A different listener's successful event must not hide a failed account
+    // subscription. Retry explicitly reattaches both profile listeners.
+    if (sessionError != null) {
+      phase = SessionPhase.error;
+      _notify();
+      return;
+    }
     phase = profile == null
         ? SessionPhase.incomplete
         : profile!.isVendor && !_vendorKnown
@@ -166,15 +177,18 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> _loadConfirmed(AccountIdentity account) async {
-    if (identity?.uid != account.uid) _attach(account);
     final epoch = _generation;
     final user = await repository.fetchUser(account.uid);
     final vendor = user?.isVendor == true
         ? await repository.fetchVendor(account.uid)
         : null;
     requireAccount(account.uid);
-    if (epoch != _generation)
+    if (epoch != _generation) {
       throw const AppFailure('The session changed. Please retry.');
+    }
+    // Restart terminal listeners only after successful server reads. A failed
+    // read must leave an incomplete-registration form mounted for retry.
+    if (phase == SessionPhase.error) _attach(account, force: true);
     profile = user;
     vendorProfile = vendor;
     _vendorKnown = true;
@@ -255,8 +269,9 @@ class AuthService extends ChangeNotifier {
 
   Future<void> completeRegistration(RegistrationData data) async {
     final account = identity;
-    if (account == null)
+    if (account == null) {
       throw const AppFailure('Sign in before completing registration.');
+    }
     _formOperation = true;
     try {
       await repository.completeRegistration(account, data);

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/router.dart';
 import '../../../core/errors/app_failure.dart';
+import '../../../core/widgets/operation_error.dart';
 import '../services/auth_service.dart';
 
 class RegisterCustomerScreen extends StatefulWidget {
@@ -31,6 +32,7 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
 
     setState(() {
       _isLoading = true;
@@ -49,6 +51,7 @@ class _RegisterCustomerScreenState extends State<RegisterCustomerScreen> {
           _errorMessage = errorMessage(e);
           _isLoading = false;
         });
+        showOperationError(context, _errorMessage!);
       }
     }
   }

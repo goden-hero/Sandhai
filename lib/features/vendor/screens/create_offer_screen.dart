@@ -6,6 +6,7 @@ import '../../../app/router.dart';
 import '../../../core/constants/offer_categories.dart';
 import '../../../models/user_model.dart';
 import '../../../core/errors/app_failure.dart';
+import '../../../core/widgets/operation_error.dart';
 import '../../auth/services/auth_service.dart';
 import '../services/offer_service.dart';
 
@@ -96,6 +97,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
 
   Future<void> _handlePublishOffer() async {
     if (!_formKey.currentState!.validate()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
 
     if (_currentVendorUser.isPendingVendor ||
         _currentVendorUser.isRejectedVendor) {
@@ -158,6 +160,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
           _errorMessage = errorMessage(e);
           _isSubmitting = false;
         });
+        showOperationError(context, _errorMessage!);
       }
     }
   }
@@ -334,6 +337,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: availableCategories.contains(_selectedCategory)
                     ? _selectedCategory
                     : availableCategories.first,
@@ -368,7 +372,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
-                enabled: !_isSubmitting,
+                          enabled: !_isSubmitting,
                           controller: _oldPriceController,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,
@@ -402,7 +406,7 @@ class _CreateOfferScreenState extends State<CreateOfferScreen> {
                         ),
                         const SizedBox(height: 6),
                         TextFormField(
-                enabled: !_isSubmitting,
+                          enabled: !_isSubmitting,
                           controller: _newPriceController,
                           keyboardType: const TextInputType.numberWithOptions(
                             decimal: true,

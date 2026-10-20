@@ -43,20 +43,20 @@ class AppRoutes {
       case vendorDashboard:
         return MaterialPageRoute(
           builder: (_) => const SessionGuard(
-            child: VendorDashboardScreen(),
             vendorOnly: true,
+            child: VendorDashboardScreen(),
           ),
         );
       case createOffer:
         return MaterialPageRoute(
           builder: (_) =>
-              const SessionGuard(child: CreateOfferScreen(), vendorOnly: true),
+              const SessionGuard(vendorOnly: true, child: CreateOfferScreen()),
         );
       case vendorProfile:
         return MaterialPageRoute(
           builder: (_) => const SessionGuard(
-            child: VendorProfileScreen(),
             vendorOnly: true,
+            child: VendorProfileScreen(),
           ),
         );
       case profile:
@@ -64,8 +64,8 @@ class AppRoutes {
         if (role == 'vendor') {
           return MaterialPageRoute(
             builder: (_) => const SessionGuard(
-              child: VendorProfileScreen(),
               vendorOnly: true,
+              child: VendorProfileScreen(),
             ),
           );
         }

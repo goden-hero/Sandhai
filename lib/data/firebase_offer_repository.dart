@@ -75,8 +75,9 @@ class FirebaseOfferRepository implements OfferRepository {
     }
     if (existing.exists) {
       final saved = OfferModel.fromFirestore(existing);
-      if (saved.vendorId != offer.vendorId)
+      if (saved.vendorId != offer.vendorId) {
         throw const AppFailure('This offer belongs to another account.');
+      }
       return saved; // Stable document ID makes retries idempotent.
     }
     tx.set(ref, offer.toFirestore());

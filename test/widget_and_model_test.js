@@ -29,6 +29,10 @@ const vendorDashboardContent = fs.readFileSync(
   'utf8'
 );
 
+const accountRepositoryContent = fs.readFileSync(path.join(__dirname, '..', 'lib/data/firebase_account_repository.dart'), 'utf8');
+const sessionGateContent = fs.readFileSync(path.join(__dirname, '..', 'lib/features/auth/screens/session_gate.dart'), 'utf8');
+const offerRepositoryContent = fs.readFileSync(path.join(__dirname, '..', 'lib/data/firebase_offer_repository.dart'), 'utf8');
+
 const customerHomeContent = fs.readFileSync(
   path.join(__dirname, '..', 'lib', 'features', 'customer', 'screens', 'customer_home_screen.dart'),
   'utf8'
@@ -55,7 +59,7 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
     assert.strictEqual(authServiceContent.includes('registerCustomer'), true);
     assert.strictEqual(authServiceContent.includes('registerVendor'), true);
     assert.strictEqual(authServiceContent.includes("role: 'vendor'"), true);
-    assert.strictEqual(authServiceContent.includes("approvalStatus: 'pending'"), true);
+    assert.strictEqual(accountRepositoryContent.includes("? 'pending'"), true);
   });
 
   await t.test('3. Register screens provide direct Customer & Vendor registration options', () => {
@@ -65,12 +69,12 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
 
   await t.test('4. Sign-in screen handles authentication & profile-based routing', () => {
     assert.strictEqual(signInScreenContent.includes('AuthService.instance.signInWithEmailAndPassword'), true);
-    assert.strictEqual(signInScreenContent.includes('userModel.role == \'vendor\''), true);
+    assert.strictEqual(sessionGateContent.includes('auth.profile!.isVendor'), true);
   });
 
   await t.test('5. Vendor Dashboard checks approval status and guards offer creation', () => {
-    assert.strictEqual(vendorDashboardContent.includes('_currentVendorUser.isPendingVendor'), true);
-    assert.strictEqual(vendorDashboardContent.includes('Pending vendors cannot publish offers'), true);
+    assert.strictEqual(vendorDashboardContent.includes('user.isPendingVendor'), true);
+    assert.strictEqual(vendorDashboardContent.includes('Only approved vendors can publish'), true);
   });
 
   await t.test('6. Customer home screen removes demo role-switching controls', () => {
@@ -79,7 +83,7 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
   });
 
   await t.test('7. AuthService prevents defaulting missing profile accounts to approved customer accounts', () => {
-    assert.strictEqual(authServiceContent.includes('User profile not found for account'), true);
+    assert.strictEqual(authServiceContent.includes('SessionPhase.incomplete'), true);
   });
 
   await t.test('8. RegisterVendorScreen collects business address & description and validates phone digits', () => {
@@ -110,7 +114,7 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
     assert.strictEqual(offerServiceContent.includes('createOffer'), true);
     assert.strictEqual(offerServiceContent.includes('isApprovedVendor'), true);
     assert.strictEqual(offerServiceContent.includes('Clearance price'), true);
-    assert.strictEqual(offerServiceContent.includes('offers/${userModel.uid}'), true);
+    assert.strictEqual(offerRepositoryContent.includes('offers/$uid/$id/$safeName'), true);
   });
 
   await t.test('12. CreateOfferScreen provides form validation, category selection, price checks, and image preview', () => {
@@ -126,8 +130,8 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
   });
 
   await t.test('13. VendorDashboardScreen displays newly posted offers from OfferService', () => {
-    assert.strictEqual(vendorDashboardContent.includes('OfferService.instance.demoOffers'), true);
-    assert.strictEqual(vendorDashboardContent.includes('_vendorOffers.length'), true);
+    assert.strictEqual(vendorDashboardContent.includes('OfferService.instance.watchVendorOffers'), true);
+    assert.strictEqual(vendorDashboardContent.includes('vendorOffers.length'), true);
   });
 
   await t.test('14. OfferService dynamically inherits store location from vendor profile and provides storage cleanup', () => {
@@ -136,8 +140,8 @@ test('Task 3 & Task 4 Architecture & Code Audit Verification', async (t) => {
       'utf8'
     );
     assert.strictEqual(offerServiceContent.includes('fetchVendorProfile'), true);
-    assert.strictEqual(offerServiceContent.includes('vendorProfile.latitude'), true);
-    assert.strictEqual(offerServiceContent.includes('uploadedStorageRef.delete()'), true);
+    assert.strictEqual(offerServiceContent.includes('vendorProfile?.latitude'), true);
+    assert.strictEqual(offerServiceContent.includes('repository.deleteUpload(uploaded)'), true);
   });
 
   await t.test('15. GeohashUtils provides 6-character base32 encoding, coordinate bounds validation, and OfferService integration', () => {

@@ -13,7 +13,10 @@ class OfferService {
   final AuthService auth;
   final OfferRepository repository;
   static OfferService? _instance;
-  static void install(OfferService service) { _instance = service; }
+  static void install(OfferService service) {
+    _instance = service;
+  }
+
   static OfferService get instance {
     final auth = AuthService.instance;
     if (_instance == null || _instance!.auth != auth) {
@@ -58,8 +61,9 @@ class OfferService {
     ValueChanged<String>? onProgress,
   }) async {
     final uid = auth.identity?.uid;
-    if (uid == null)
+    if (uid == null) {
       throw const AppFailure('Sign in as a vendor before publishing.');
+    }
     final userModel = await auth.fetchUserProfile(uid);
     if (userModel == null || !userModel.isApprovedVendor) {
       throw const AppFailure(
@@ -97,8 +101,9 @@ class OfferService {
     final existing = await repository.fetch(id);
     auth.requireAccount(uid);
     if (existing != null) {
-      if (existing.vendorId != uid)
+      if (existing.vendorId != uid) {
         throw const AppFailure('This offer belongs to another account.');
+      }
       return existing;
     }
     UploadedImage? uploaded;
@@ -110,7 +115,17 @@ class OfferService {
         imageBytes,
         imageFileName ?? '$id.jpg',
       );
-      auth.requireAccount(uid);
+      try {
+        auth.requireAccount(uid);
+      } catch (_) {
+        // No document write has started, so this upload is unreferenced.
+        try {
+          await repository.deleteUpload(uploaded);
+        } catch (_) {
+          /* The previous account may no longer authorize cleanup. */
+        }
+        rethrow;
+      }
     }
     final now = DateTime.now();
     final offer = OfferModel(

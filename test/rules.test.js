@@ -435,3 +435,124 @@ test('12. Vendor cannot update another vendor profile document', async () => {
 });
 
 
+
+// Phase 2: online transactions, completion, account isolation, and upload cleanup.
+function userData(uid, role='vendor', status='pending') {
+  return {displayName:'Persistent Store',email:`${uid}@example.com`,role,approvalStatus:status,createdAt:new Date()};
+}
+function vendorData() {
+  return {name:'Persistent Store',phone:'9876543210',category:'Groceries',address:'Store address',
+    latitude:13.0827,longitude:80.2707,geohash:'tf346c',createdAt:new Date()};
+}
+function offerData(uid, status='active') {
+  const now=new Date();
+  return {vendorId:uid,title:'Persistent offer',description:'Clearance stock',oldPrice:100,newPrice:50,imageUrl:'',
+    latitude:13.0827,longitude:80.2707,geohash:'tf346c',createdAt:now,expiryTime:new Date(+now+3600000),status};
+}
+
+test('13. Atomic vendor completion creates both profiles and never grants approval', async()=>{
+  const db=testEnv.authenticatedContext('atomicVendor').firestore();
+  await assertSucceeds(db.runTransaction(async tx=>{
+    const u=db.doc('users/atomicVendor'),v=db.doc('vendors/atomicVendor');
+    await tx.get(u); await tx.get(v);
+    tx.set(u,userData('atomicVendor')); tx.set(v,vendorData());
+  }));
+  assert.equal((await db.doc('users/atomicVendor').get()).data().approvalStatus,'pending');
+  assert.equal((await db.doc('vendors/atomicVendor').get()).data().name,'Persistent Store');
+  const bad=testEnv.authenticatedContext('selfApprovedAtomic').firestore();
+  const batch=bad.batch(); batch.set(bad.doc('users/selfApprovedAtomic'),userData('selfApprovedAtomic','vendor','approved'));
+  batch.set(bad.doc('vendors/selfApprovedAtomic'),vendorData()); await assertFails(batch.commit());
+});
+
+test('14. Existing incomplete vendors can finish their store without resetting approval',async()=>{
+  await seedUser('partialVendor','vendor','approved');
+  const db=testEnv.authenticatedContext('partialVendor').firestore();
+  const before=(await db.doc('users/partialVendor').get()).data();
+  await assertSucceeds(db.runTransaction(async tx=>{
+    const user=await tx.get(db.doc('users/partialVendor'));
+    const vendor=await tx.get(db.doc('vendors/partialVendor'));
+    assert.equal(user.data().role,'vendor');
+    if(!vendor.exists)tx.set(db.doc('vendors/partialVendor'),vendorData());
+  }));
+  assert.deepEqual((await db.doc('users/partialVendor').get()).data(),before);
+  await assertFails(db.doc('users/partialVendor').update({role:'customer'}));
+  await assertFails(db.doc('users/partialVendor').update({approvalStatus:'pending'}));
+});
+
+test('15. Profile transaction failure rolls back the user display name too',async()=>{
+  await seedUser('profileAtomic','vendor','pending','Original');
+  await seedVendor('profileAtomic','Original','9876543210','Groceries');
+  const db=testEnv.authenticatedContext('profileAtomic').firestore();
+  await assertFails(db.runTransaction(async tx=>{
+    await tx.get(db.doc('users/profileAtomic')); await tx.get(db.doc('vendors/profileAtomic'));
+    tx.update(db.doc('users/profileAtomic'),{displayName:'False success'});
+    tx.update(db.doc('vendors/profileAtomic'),{name:'False success',phone:''});
+  }));
+  assert.equal((await db.doc('users/profileAtomic').get()).data().displayName,'Original');
+  assert.equal((await db.doc('vendors/profileAtomic').get()).data().name,'Original');
+});
+
+test('16. Vendor-scoped queries retain private offers and block other private dashboards',async()=>{
+  await seedUser('privateA','vendor','approved'); await seedUser('privateB','vendor','approved');
+  await seedOffer('aDraft','privateA',{status:'draft'}); await seedOffer('bDraft','privateB',{status:'draft'});
+  const a=testEnv.authenticatedContext('privateA').firestore();
+  const own=await assertSucceeds(a.collection('offers').where('vendorId','==','privateA').orderBy('createdAt','desc').get());
+  assert.deepEqual(own.docs.map(d=>d.id),['aDraft']);
+  await assertFails(a.collection('offers').where('vendorId','==','privateB').get());
+  await assertFails(a.doc('offers/bDraft').get());
+});
+
+test('17. Offer transactions use a stable ID and approval remains authoritative',async()=>{
+  await seedUser('stableVendor','vendor','approved');
+  const db=testEnv.authenticatedContext('stableVendor').firestore();
+  async function save(){return db.runTransaction(async tx=>{
+    await tx.get(db.doc('users/stableVendor'));
+    const ref=db.doc('offers/stableOffer'); const old=await tx.get(ref);
+    if(!old.exists) tx.set(ref,offerData('stableVendor'));
+  });}
+  await assertSucceeds(save()); await assertSucceeds(save());
+  assert.equal((await db.collection('offers').where('vendorId','==','stableVendor').get()).size,1);
+  await seedUser('stableVendor','vendor','suspended');
+  await assertFails(db.collection('offers').add(offerData('stableVendor')));
+});
+
+test('18. Approval snapshots update an already authenticated client',async()=>{
+  await seedUser('observedVendor','vendor','pending');
+  const db=testEnv.authenticatedContext('observedVendor').firestore();
+  const statuses=[];
+  let stop;
+  try {
+    await new Promise((resolve,reject)=>{
+      const timeout=setTimeout(()=>reject(new Error('Approval subscription timed out')),10000);
+      stop=db.doc('users/observedVendor').onSnapshot(async doc=>{
+        const status=doc.data().approvalStatus; statuses.push(status);
+        try {
+          if(status==='pending')await seedUser('observedVendor','vendor','approved');
+          if(status==='approved')await seedUser('observedVendor','vendor','rejected');
+          if(status==='rejected'){clearTimeout(timeout);resolve();}
+        }catch(e){clearTimeout(timeout);reject(e);}
+      },reject);
+    });
+    assert.deepEqual(statuses,['pending','approved','rejected']);
+  }finally{if(stop)stop();}
+});
+
+test('19. Upload errors reject and owners can clean up after revoked approval',async()=>{
+  await seedUser('cleanupVendor','vendor','approved'); await seedUser('cleanupOther','vendor','approved');
+  const storage=testEnv.authenticatedContext('cleanupVendor').storage();
+  const ref=storage.ref('offers/cleanupVendor/offer/image.png');
+  await assertSucceeds(ref.put(Buffer.from([137,80,78,71]),{contentType:'image/png'}));
+  await seedUser('cleanupVendor','vendor','suspended');
+  await assertFails(storage.ref('offers/cleanupVendor/offer/new.png').put(Buffer.from('x'),{contentType:'image/png'}));
+  await assertFails(testEnv.authenticatedContext('cleanupOther').storage().ref(ref.fullPath).delete());
+  await assertSucceeds(ref.delete());
+  await seedUser('cleanupVendor','vendor','approved');
+  await assertFails(storage.ref('offers/cleanupVendor/offer/text.txt').put(Buffer.from('not an image'),{contentType:'text/plain'}));
+});
+
+test('20. Offer field injection is rejected on creation and update',async()=>{
+  await seedUser('offerFields','vendor','approved'); const db=testEnv.authenticatedContext('offerFields').firestore();
+  await assertFails(db.doc('offers/injected').set({...offerData('offerFields'),isAdmin:true}));
+  await assertSucceeds(db.doc('offers/clean').set(offerData('offerFields')));
+  await assertFails(db.doc('offers/clean').update({isAdmin:true}));
+});

@@ -10,6 +10,8 @@ import 'app.dart';
 import '../features/auth/services/auth_service.dart';
 import 'config.dart';
 import 'theme.dart';
+import 'web_emulator_auth.dart'
+    if (dart.library.js_interop) 'web_emulator_auth_web.dart';
 
 /// Returns a visible failure screen if the selected Firebase mode cannot start.
 Future<Widget> createApplication({
@@ -37,6 +39,9 @@ Future<Widget> createApplication({
 
 Future<void> initializeFirebaseBackend(AppConfig config) async {
   if (config.isDemo) return;
+  // FlutterFire remembers an emulator on localhost debug reloads. The explicit
+  // current mode/host must take precedence over that previous-session hint.
+  clearRememberedWebEmulator();
 
   final FirebaseOptions options;
   if (config.mode == AppMode.emulator) {
@@ -62,20 +67,37 @@ Future<void> initializeFirebaseBackend(AppConfig config) async {
     }
   }
 
+  if (config.mode == AppMode.emulator) {
+    await prepareWebEmulatorAuth(options, config.emulatorHost);
+  }
   await Firebase.initializeApp(options: options);
   // Auth persists across browser reloads; Firestore writes must be server-confirmed.
-  if (kIsWeb) await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: false,
   );
   if (config.mode == AppMode.emulator) {
-    await FirebaseAuth.instance.useAuthEmulator(config.emulatorHost, 9099);
-    FirebaseFirestore.instance.useFirestoreEmulator(config.emulatorHost, 8080);
+    if (!kIsWeb) {
+      await FirebaseAuth.instance.useAuthEmulator(
+        config.emulatorHost,
+        9099,
+        automaticHostMapping: false,
+      );
+    }
+    // AppConfig already chooses 10.0.2.2 for an Android emulator. Preserve an
+    // explicit loopback host for USB-forwarded physical devices as well.
+    FirebaseFirestore.instance.useFirestoreEmulator(
+      config.emulatorHost,
+      8080,
+      automaticHostMapping: false,
+    );
     await FirebaseStorage.instance.useStorageEmulator(
       config.emulatorHost,
       9199,
+      automaticHostMapping: false,
     );
   }
+  // Configure emulators before restoring the web Auth session/token.
+  if (kIsWeb) await FirebaseAuth.instance.setPersistence(Persistence.LOCAL);
 }
 
 class StartupFailureApp extends StatelessWidget {

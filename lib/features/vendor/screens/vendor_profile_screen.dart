@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/constants/offer_categories.dart';
 import '../../../core/errors/app_failure.dart';
+import '../../../core/widgets/operation_error.dart';
 import '../../../models/vendor_model.dart';
 import '../../auth/services/auth_service.dart';
 
@@ -56,10 +57,11 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
         AuthService.instance.identity!.uid,
       );
       if (!mounted) return;
-      if (vendor == null)
+      if (vendor == null) {
         throw const AppFailure(
           'Your store profile is incomplete. Finish registration first.',
         );
+      }
       _vendor = vendor;
       _populate(vendor);
     } catch (e) {
@@ -71,6 +73,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
 
   Future<void> _saveProfileUpdates() async {
     if (!_formKey.currentState!.validate()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     setState(() {
       _isSaving = true;
       _error = null;
@@ -93,7 +96,10 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
       ScaffoldMessenger.of(context)
           .showSnackBar(const SnackBar(content: Text('Vendor profile saved.')));
     } catch (e) {
-      if (mounted) setState(() => _error = errorMessage(e));
+      if (mounted) {
+        setState(() => _error = errorMessage(e));
+        showOperationError(context, _error!);
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
@@ -204,7 +210,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               TextFormField(
-                enabled: !_isSaving,
+                                enabled: !_isSaving,
                                 controller: _nameController,
                                 decoration: const InputDecoration(
                                   labelText: 'Store name',
@@ -215,6 +221,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                               ),
                               const SizedBox(height: 12),
                               DropdownButtonFormField<String>(
+                                isExpanded: true,
                                 initialValue: _category,
                                 decoration: const InputDecoration(
                                   labelText: 'Category',
@@ -237,7 +244,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                               ),
                               const SizedBox(height: 12),
                               TextFormField(
-                enabled: !_isSaving,
+                                enabled: !_isSaving,
                                 controller: _phoneController,
                                 decoration: const InputDecoration(
                                   labelText: 'Phone',
@@ -252,7 +259,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                               ),
                               const SizedBox(height: 12),
                               TextFormField(
-                enabled: !_isSaving,
+                                enabled: !_isSaving,
                                 controller: _addressController,
                                 decoration: const InputDecoration(
                                   labelText: 'Business address',
@@ -260,7 +267,7 @@ class _VendorProfileScreenState extends State<VendorProfileScreen> {
                               ),
                               const SizedBox(height: 12),
                               TextFormField(
-                enabled: !_isSaving,
+                                enabled: !_isSaving,
                                 controller: _descriptionController,
                                 decoration: const InputDecoration(
                                   labelText: 'Description',

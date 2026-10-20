@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/router.dart';
 import '../../../core/errors/app_failure.dart';
+import '../../../core/widgets/operation_error.dart';
 import '../../../core/constants/offer_categories.dart';
 import '../services/auth_service.dart';
 
@@ -39,6 +40,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
 
   Future<void> _handleRegister() async {
     if (!_formKey.currentState!.validate()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
 
     setState(() {
       _isLoading = true;
@@ -61,6 +63,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
           _errorMessage = errorMessage(e);
           _isLoading = false;
         });
+        showOperationError(context, _errorMessage!);
       }
     }
   }
@@ -195,6 +198,7 @@ class _RegisterVendorScreenState extends State<RegisterVendorScreen> {
               ),
               const SizedBox(height: 6),
               DropdownButtonFormField<String>(
+                isExpanded: true,
                 initialValue: availableCategories.contains(_selectedCategory)
                     ? _selectedCategory
                     : availableCategories.first,

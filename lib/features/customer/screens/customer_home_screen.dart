@@ -36,6 +36,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
   Future<void> _handleRefresh() async {
     setState(() => _isLoading = true);
     await Future.delayed(const Duration(milliseconds: 600));
+    if (!mounted) return;
     setState(() {
       _isLoading = false;
       _offers = AppConfig.current.isDemo ? MockData.getMockOffers() : [];
@@ -48,7 +49,7 @@ class _CustomerHomeScreenState extends State<CustomerHomeScreen> {
                 ? 'Demo offers refreshed.'
                 : 'Nearby discovery will be added in a later phase.',
           ),
-          duration: Duration(seconds: 1),
+          duration: const Duration(seconds: 1),
         ),
       );
     }

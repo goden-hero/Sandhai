@@ -15,11 +15,14 @@ class DemoAccountRepository implements AccountRepository {
   @override
   AccountIdentity? get identity => _identity;
   @override
-  Stream<AccountIdentity?> authChanges() async* {
-    yield identity;
-    yield* _auth.stream;
-  }
-
+  Stream<AccountIdentity?> authChanges() => Stream.multi((out) {
+    final subscription = _auth.stream.listen(
+      out.addSync,
+      onError: out.addErrorSync,
+    );
+    out.addSync(identity);
+    out.onCancel = subscription.cancel;
+  });
   @override
   Future<AccountIdentity> createAccount(String email, String password) async {
     _identity = AccountIdentity(
@@ -51,16 +54,18 @@ class DemoAccountRepository implements AccountRepository {
   }
 
   @override
-  Stream<UserModel?> watchUser(String uid) async* {
-    yield users[uid];
-    yield* _profiles.stream.map((_) => users[uid]);
-  }
+  Stream<UserModel?> watchUser(String uid) => Stream.multi((out) {
+    final sub = _profiles.stream.listen((_) => out.addSync(users[uid]));
+    out.addSync(users[uid]);
+    out.onCancel = sub.cancel;
+  });
 
   @override
-  Stream<VendorModel?> watchVendor(String uid) async* {
-    yield vendors[uid];
-    yield* _profiles.stream.map((_) => vendors[uid]);
-  }
+  Stream<VendorModel?> watchVendor(String uid) => Stream.multi((out) {
+    final sub = _profiles.stream.listen((_) => out.addSync(vendors[uid]));
+    out.addSync(vendors[uid]);
+    out.onCancel = sub.cancel;
+  });
 
   @override
   Future<UserModel?> fetchUser(String uid) async => users[uid];

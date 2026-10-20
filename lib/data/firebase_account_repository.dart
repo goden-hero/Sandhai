@@ -41,14 +41,14 @@ class FirebaseAccountRepository implements AccountRepository {
       .collection('users')
       .doc(uid)
       .snapshots(includeMetadataChanges: true)
-      .where((d) => !d.metadata.hasPendingWrites)
+      .where((d) => !d.metadata.hasPendingWrites && !d.metadata.isFromCache)
       .map((d) => d.exists ? UserModel.fromFirestore(d) : null);
   @override
   Stream<VendorModel?> watchVendor(String uid) => _db
       .collection('vendors')
       .doc(uid)
       .snapshots(includeMetadataChanges: true)
-      .where((d) => !d.metadata.hasPendingWrites)
+      .where((d) => !d.metadata.hasPendingWrites && !d.metadata.isFromCache)
       .map((d) => d.exists ? VendorModel.fromFirestore(d) : null);
   @override
   Future<UserModel?> fetchUser(String uid) async {

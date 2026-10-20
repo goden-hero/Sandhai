@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/router.dart';
 import '../../../core/errors/app_failure.dart';
+import '../../../core/widgets/operation_error.dart';
 import '../services/auth_service.dart';
 
 class SignInScreen extends StatefulWidget {
@@ -27,6 +28,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   Future<void> _handleSignIn() async {
     if (!_formKey.currentState!.validate()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
 
     setState(() {
       _isLoading = true;
@@ -44,6 +46,7 @@ class _SignInScreenState extends State<SignInScreen> {
           _errorMessage = errorMessage(e);
           _isLoading = false;
         });
+        showOperationError(context, _errorMessage!);
       }
     }
   }

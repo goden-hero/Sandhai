@@ -14,10 +14,11 @@ class DemoOfferRepository implements OfferRepository {
       offers.values.where((o) => o.vendorId == uid).toList()
         ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
   @override
-  Stream<List<OfferModel>> watchVendor(String uid) async* {
-    yield _for(uid);
-    yield* _changes.stream.map((_) => _for(uid));
-  }
+  Stream<List<OfferModel>> watchVendor(String uid) => Stream.multi((out) {
+    final sub = _changes.stream.listen((_) => out.addSync(_for(uid)));
+    out.addSync(_for(uid));
+    out.onCancel = sub.cancel;
+  });
 
   @override
   Future<OfferModel?> fetch(String id) async => offers[id];

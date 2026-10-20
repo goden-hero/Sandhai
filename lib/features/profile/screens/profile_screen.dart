@@ -34,9 +34,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
     try {
       await AuthService.instance.signOut();
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         ScaffoldMessenger.of(context)
             .showSnackBar(SnackBar(content: Text(errorMessage(e))));
+      }
       return;
     }
     if (!mounted) return;
@@ -166,38 +167,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
           const Divider(),
 
-          const ListTile(
-            leading: Icon(Icons.location_on_outlined),
-            title: Text('Default Location'),
-            subtitle: Text('T. Nagar, Chennai (Mock 5 KM Radius)'),
+          ListTile(
+            leading: const Icon(Icons.location_on_outlined),
+            title: const Text('Default Location'),
+            subtitle: Text(
+              AppConfig.current.isDemo
+                  ? 'T. Nagar, Chennai (Mock 5 KM Radius)'
+                  : 'Location collection is not connected yet.',
+            ),
           ),
           const Divider(),
 
-          ListTile(
-            leading: const Icon(Icons.notifications_outlined),
-            title: const Text('Push Notifications'),
-            subtitle: Text(
-              _notificationsEnabled
-                  ? 'Enabled: FCM alerts for nearby 5 KM offers'
-                  : 'Disabled: No local clearance notifications',
-            ),
-            trailing: Switch(
-              value: _notificationsEnabled,
-              onChanged: (val) {
-                setState(() => _notificationsEnabled = val);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      val
-                          ? 'Push notifications enabled.'
-                          : 'Push notifications disabled.',
+          if (AppConfig.current.isDemo)
+            ListTile(
+              leading: const Icon(Icons.notifications_outlined),
+              title: const Text('Push Notifications'),
+              subtitle: Text(
+                _notificationsEnabled
+                    ? 'Enabled: FCM alerts for nearby 5 KM offers'
+                    : 'Disabled: No local clearance notifications',
+              ),
+              trailing: Switch(
+                value: _notificationsEnabled,
+                onChanged: (val) {
+                  setState(() => _notificationsEnabled = val);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        val
+                            ? 'Push notifications enabled.'
+                            : 'Push notifications disabled.',
+                      ),
+                      duration: const Duration(seconds: 1),
                     ),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
           const Divider(),
 
           ListTile(

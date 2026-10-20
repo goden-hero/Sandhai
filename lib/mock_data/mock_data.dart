@@ -47,7 +47,8 @@ class MockData {
         id: 'offer_2',
         vendorId: 'vendor_demo_02',
         title: 'Fresh Whole Wheat Bread (2 Loaves)',
-        description: 'Freshly baked today at 6 AM. Clearance before bakery closing.',
+        description:
+            'Freshly baked today at 6 AM. Clearance before bakery closing.',
         oldPrice: 90.0,
         newPrice: 40.0,
         imageUrl: '',
@@ -62,7 +63,8 @@ class MockData {
         id: 'offer_3',
         vendorId: 'vendor_demo_03',
         title: 'Farm Fresh A2 Cow Milk 1L',
-        description: 'Pasteurized pure cow milk packets. Same-day clearance discount.',
+        description:
+            'Pasteurized pure cow milk packets. Same-day clearance discount.',
         oldPrice: 65.0,
         newPrice: 35.0,
         imageUrl: '',
@@ -92,7 +94,8 @@ class MockData {
         id: 'offer_5',
         vendorId: 'vendor_demo_04',
         title: 'Assorted Bakery Pastries (Box of 4)',
-        description: 'Chocolate éclair, fruit tart, and butter croissants package deal.',
+        description:
+            'Chocolate éclair, fruit tart, and butter croissants package deal.',
         oldPrice: 220.0,
         newPrice: 100.0,
         imageUrl: '',

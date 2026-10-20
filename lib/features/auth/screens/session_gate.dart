@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/errors/app_failure.dart';
+import '../../../core/widgets/operation_error.dart';
 import '../../../data/account_repository.dart';
 import '../../customer/screens/customer_home_screen.dart';
 import '../../onboarding/screens/welcome_screen.dart';
@@ -36,10 +37,11 @@ class SessionGate extends StatelessWidget {
                       try {
                         await auth.signOut();
                       } catch (e) {
-                        if (context.mounted)
+                        if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(content: Text(errorMessage(e))),
                           );
+                        }
                       }
                     },
                     child: const Text('Sign Out'),
@@ -71,8 +73,9 @@ class SessionGuard extends StatelessWidget {
     builder: (context, _) {
       final auth = AuthService.instance;
       if (auth.phase != SessionPhase.ready ||
-          (vendorOnly && !auth.profile!.isVendor))
+          (vendorOnly && !auth.profile!.isVendor)) {
         return const SessionGate();
+      }
       return child;
     },
   );
@@ -110,6 +113,7 @@ class _CompletionScreenState extends State<CompletionScreen> {
 
   Future<void> _save() async {
     if (!_form.currentState!.validate()) return;
+    ScaffoldMessenger.of(context).clearSnackBars();
     setState(() {
       _saving = true;
       _error = null;
@@ -124,7 +128,10 @@ class _CompletionScreenState extends State<CompletionScreen> {
         ),
       );
     } catch (e) {
-      if (mounted) setState(() => _error = errorMessage(e));
+      if (mounted) {
+        setState(() => _error = errorMessage(e));
+        showOperationError(context, _error!);
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }

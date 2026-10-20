@@ -2,8 +2,9 @@ class OfferCategories {
   static const values = [
     'All',
     'Groceries',
-    'Produce',
+    'Fresh Produce',
     'Bakery & Dairy',
     'Snacks & Beverages',
+    'Services',
   ];
 }

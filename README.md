@@ -9,17 +9,21 @@
 ### 👤 1. Authentication & Role-Based Access Control
 - **Dual Role System**: Separate registration and navigation paths for **Customers** and **Vendors**.
 - **Vendor Approval Workflow**: Newly registered vendors start with `PENDING` approval status. Offer creation is guarded in the UI and enforced at the Firebase Security Rules level until store verification.
+- **Restored sessions**: Firebase Auth restores the account on startup/reload. The entry screen waits for the account profile, routes missing profiles to registration completion, and shows retry/sign-out controls for session errors.
+- **Recoverable registration**: If the profile transaction fails after Auth account creation, retry completes the original UID; after restart, sign in with the same email/password to complete registration. User/vendor profiles are created together. Completion preserves any existing role, approval, and creation time.
 
 ### 🏬 2. Vendor Profile & Store Management
 - Store profile creation and editing (Store Name, Phone, Category, Address, Description).
 - Approval status indicators (`PENDING APPROVAL` vs `VERIFIED STORE` vs `SUSPENDED`).
 - Profile edit protection (`PopScope` unsaved changes warning).
+- Profile edits update the store and user display name atomically. Approval is observed while signed in, including rejection/revocation.
+- Vendor dashboards subscribe to Firestore offers filtered by the current vendor UID, with loading, empty, error, and retry states. Logout/account changes dispose the previous account's subscriptions and navigation stack.
 
 ### 🏷️ 3. Clearance Offer Posting & Image Upload
 - Material 3 offer posting form collecting product title, description, category, original price, clearance price, and offer validity duration (hours).
 - **Client & Server Price Validation**: Real-time validation enforcing `clearancePrice <= originalPrice` and positive numeric prices.
-- **Firebase Storage Integration**: The service supports upload bytes; the current UI attaches synthetic sample bytes rather than selecting a real photo. Image uploads target authorized paths `offers/{vendorUid}/{offerId}/{filename}` with file format (`png/jpg/jpeg/webp`) and size limits (`<= 5MB`).
-- **Partial Failure Handling**: The service attempts cleanup after a failed Firestore write. Storage deletion authorization and propagation of save failures still need the subsequent persistence-hardening phase.
+- **Firebase Storage Integration**: The service accepts image bytes and awaits upload and URL retrieval. Upload paths are `offers/{vendorUid}/{offerId}/{filename}`, with image MIME and size limits (`<= 5MB`). Real image selection remains deferred; synthetic attachment is available only in demo mode, and the Firebase-mode photo control is disabled.
+- **Confirmed saves**: Online Firestore transactions distinguish pending operations from confirmed saves. Failed profile/offer saves display errors and retain form values for retry. Each offer form keeps a stable document ID to reconcile lost responses without duplicate offers. Failed uploads stop publication; confirmed unreferenced uploads are cleaned up when possible. An uncertain commit retains its image until the outcome can be checked.
 
 ### 📍 4. Spatial Geolocation & Deterministic Geohashing
 - **Deterministic Base32 Geohash Utility (`GeohashUtils`)**: Generates 6-character spatial geohashes (~1.2 km x 0.6 km bounding box) for stored spatial indexing. Radius-aware query coverage and exact distance filtering remain future work.
@@ -103,7 +107,8 @@ flutter run -d <android-device-id> --dart-define=APP_MODE=demo
 Demo sign-in accepts an email and a nonempty password without creating a Firebase
 account. Emails containing `vendor` select the existing pending-vendor demo path;
 other emails select the customer path. Registration also works locally. Sample
-feeds, photo selection, distances, and dashboard metrics remain demo features.
+customer feeds, synthetic photo attachment, and distances are available only in
+demo mode. The vendor dashboard shows only offers created by that demo account.
 
 ### Firebase emulators
 
@@ -111,7 +116,7 @@ Node.js 22 and a Java runtime are needed for the existing emulator tests. Instal
 the Node test dependencies and Firebase CLI if they are not already available:
 
 ```bash
-npm install
+npm ci
 npm install --global firebase-tools@15.31.0
 firebase emulators:start --only firestore,storage,auth --project sandhai-5km-demo
 ```
@@ -137,6 +142,9 @@ Without an explicit host, browser builds use `127.0.0.1` and native Android buil
 use `10.0.2.2`. `FIREBASE_EMULATOR_HOST` accepts a hostname/IP, without a scheme,
 port, or path. For a physical device over LAN, use the computer's LAN address and
 configure the emulators' listening hosts and firewall accordingly.
+The app disables FlutterFire's automatic host rewriting: an explicit
+`127.0.0.1` remains loopback for USB forwarding, while the Android emulator
+default is already selected as `10.0.2.2` by `AppConfig`.
 `FIREBASE_EMULATOR_PROJECT_ID` can override `sandhai-5km-demo`; the CLI project ID
 and app define must match. Android debug builds permit cleartext HTTP for the
 local emulators; release builds retain Android's default policy.
@@ -144,8 +152,36 @@ local emulators; release builds retain Android's default policy.
 Initialization/configuration failures in emulator and production modes display
 an error screen and do not open demo mode. Successful Firebase initialization
 configures the SDK; it does not prove the emulator services are reachable.
-The Firebase configuration, rules, and indexes are preserved from the existing
-project. Live nearby discovery and service persistence hardening are later phases.
+The Firebase project configuration and query indexes are retained. Rules support
+atomic registration, private vendor queries, and owner upload cleanup after
+revocation. Firebase-mode customer discovery shows an explicit empty state until
+nearby discovery is implemented; it never substitutes demo offers after errors.
+
+Auth sessions persist locally, while Firestore disk persistence is disabled.
+Writes use online transactions and are acknowledged by the server before success
+is displayed. An unavailable server can leave an operation pending while the SDK
+retries; pending text remains visible and the app does not claim it was saved.
+Unsaved form values are retained while that screen remains open, not across a
+browser reload. Saved profiles/offers survive restart as long as emulator data
+is retained. For emulator data across CLI restarts, use:
+
+```bash
+firebase emulators:start --only firestore,storage,auth --project sandhai-5km-demo --import=.firebase/local-data --export-on-exit=.firebase/local-data
+```
+
+Omit `--import` on the first start when no export exists. For local approval
+testing, change your own emulator user's `approvalStatus` to `approved`,
+`rejected`, or `suspended` in the Emulator UI at `http://127.0.0.1:4000`.
+Clients cannot change approval through application writes. Administration is a
+later phase.
+
+The locked FlutterFire web Auth plugin restores sessions during Firebase core
+initialization. `web/firebase_emulator_bootstrap.js` connects Auth before that
+restoration in emulator mode. Its JS SDK version/dependencies match
+`firebase_core_web 2.24.1` / `firebase_auth_web 5.15.3` in `pubspec.lock`; review
+the adapter and rerun the browser workflow when upgrading FlutterFire. The
+previous localhost/debug emulator hint is cleared before Firebase starts, so a
+remembered emulator cannot override the selected mode or host.
 
 ### Production configuration
 
@@ -186,6 +222,7 @@ failure tests for both Firebase modes. It uses the in-process Flutter test runne
 ```bash
 flutter test test/startup_test.dart
 flutter test test/config_test.dart
+flutter test test/persistence_test.dart test/persistence_widget_test.dart
 ```
 
 The original Node checks are retained as supplementary source-text checks and
@@ -196,15 +233,46 @@ npm test
 firebase emulators:exec --only firestore,storage,auth --project sandhai-5km-demo "node --test test/rules.test.js"
 ```
 
-`npm run test:emulators` is the existing convenience wrapper; it downloads
-`firebase-tools@latest` through `npx`. Use the pinned CLI command above for the
-recorded baseline. `emulators:exec` runs tests and shuts down; use
+`npm run test:emulators` uses the Firebase CLI installed above, with local proxy
+bypass and an explicit project. `emulators:exec` runs tests and shuts down; use
 `emulators:start` when running the app interactively.
+
+The browser regression uses a built emulator-mode app, real Auth/Firestore SDKs,
+and headless Chrome through the pinned `playwright-core` development dependency.
+It verifies registration, reload restoration, live approval/revocation, confirmed
+profile/offer persistence, a deliberately rejected profile transaction and retry,
+private dashboards across account switches, and Auth-only registration recovery.
+Run with disposable local emulators; the test temporarily tightens a local rule
+to reject one profile name and restores the repository rules in `finally`.
+
+```bash
+flutter build web --dart-define=APP_MODE=emulator --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1 --output=build/emulator-web
+firebase emulators:exec --only firestore,storage,auth --project sandhai-5km-demo "node tool/verify_phase2_browser.cjs"
+# Equivalent wrapper with proxy bypass configured
+npm run test:browser:emulators
+```
+
+Chrome defaults to `/usr/bin/google-chrome`; set `CHROME_EXECUTABLE` to override
+it. On hosts with proxy environment variables, prefix emulator test commands
+with `env NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy=`.
+
+For the SM J810GF device regression, install an emulator-mode APK, configure the
+three USB reverse mappings above, start the local emulators, and keep the phone
+awake and unlocked. The driver uses existing forms and UI Automator plus
+independent Firestore REST reads; it creates synthetic local vendor accounts and
+temporarily tightens a local rule for the failure/retry check. It never clears
+app data. See the Phase 2 report for the tested toolchain, exact installation and
+connectivity commands, artifacts, and results.
+
+```bash
+python3 tool/verify_phase2_android.py --adb /absolute/path/to/Android/Sdk/platform-tools/adb --serial 373c972d --artifacts /tmp/sandhai-android-verification
+```
 
 ---
 
 The recorded command results, toolchain details, and complete changed-file list
-are in [the Phase 1 baseline report](phase_1_baseline.md).
+are in [the Phase 1 baseline report](phase_1_baseline.md) and
+[the Phase 2 persistence report](phase_2_persistence.md).
 
 ## 📁 Project Structure
 
@@ -225,6 +293,7 @@ sandhai/
 │   │   ├── user_model.dart            # Customer & Vendor profile data model
 │   │   ├── vendor_model.dart          # Vendor store profile data model
 │   │   └── offer_model.dart           # Clearance offer data model
+│   ├── data/                         # Separate Firebase and demo repositories
 │   ├── features/
 │   │   ├── auth/                      # Authentication & Registration screens/services
 │   │   │   ├── screens/               # Welcome, SignIn, Register Customer, Register Vendor
@@ -239,6 +308,8 @@ sandhai/
 ├── test/
 │   ├── startup_test.dart              # Real demo startup and Firebase failure smoke tests
 │   ├── config_test.dart               # Application mode and emulator host tests
+│   ├── persistence_test.dart          # Session, registration, save/upload failures
+│   ├── persistence_widget_test.dart   # Form retry, approval, logout subscriptions
 │   ├── widget_and_model_test.js       # Node.js static source-text checks
 │   └── rules.test.js                  # Firebase Emulator security rules test suite
 ├── android/                           # Android runner (com.sandhai.app)
