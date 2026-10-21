@@ -17,7 +17,7 @@ class LocationService {
     try {
       if (!await _platform.isLocationServiceEnabled()) {
         throw const AppFailure(
-          'Location services are disabled. Enable location in device settings, or enter your store coordinates manually.',
+          'Location services are disabled. Enable location in device settings and retry.',
         );
       }
       var permission = await _platform.checkPermission();
@@ -28,13 +28,13 @@ class LocationService {
       }
       if (permission == LocationPermission.deniedForever) {
         throw const AppFailure(
-          'Location permission is permanently denied. Allow location in app settings, or enter coordinates manually.',
+          'Location permission is permanently denied. Allow location in app settings and retry.',
         );
       }
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.unableToDetermine) {
         throw const AppFailure(
-          'Location permission was denied. You can retry or enter your store coordinates manually.',
+          'Location permission was denied. Allow location in device/browser settings and retry.',
         );
       }
       final fix = await _platform.getCurrentPosition(
@@ -46,27 +46,27 @@ class LocationService {
       return StoreLocation(fix.latitude, fix.longitude);
     } on TimeoutException {
       throw const AppFailure(
-        'Location timed out. Move somewhere with a clearer signal and retry, or enter coordinates manually.',
+        'Location timed out. Move somewhere with a clearer signal and retry.',
       );
     } on UnsupportedError {
       throw const AppFailure(
-        'Device location is unavailable here. Use HTTPS or localhost in a supported browser, or enter coordinates manually.',
+        'Device location is unavailable here. Use HTTPS or localhost in a supported browser.',
       );
     } on PermissionDeniedException {
       throw const AppFailure(
-        'Location permission was denied. Check app/browser permissions or enter coordinates manually.',
+        'Location permission was denied. Check app/browser permissions and retry.',
       );
     } on LocationServiceDisabledException {
       throw const AppFailure(
-        'Location services are disabled. Enable them or enter coordinates manually.',
+        'Location services are disabled. Enable them and retry.',
       );
     } on MissingPluginException {
       throw const AppFailure(
-        'Device location is unavailable on this platform. Enter your store coordinates manually.',
+        'Device location is unavailable on this platform. Use a supported Android device or browser.',
       );
     } on PlatformException {
       throw const AppFailure(
-        'Could not obtain device location. Check device/browser settings and retry, or enter coordinates manually.',
+        'Could not obtain device location. Check device/browser settings and retry.',
       );
     }
   }

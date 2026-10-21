@@ -620,3 +620,30 @@ test('24. Storage MIME/extension/size checks and deletion are separate; publishe
   await testEnv.withSecurityRulesDisabled(c=>c.firestore().doc('offers/photo').delete());
   await seedUser('photoOwner','vendor','suspended');await assertSucceeds(ref.delete());
 });
+
+test('25. Bounded public active queries succeed; unfiltered and private dashboard reads fail', async()=>{
+  await seedUser('nearbyCustomer','customer');
+  await seedOffer('nearby-public','nearbyVendor');
+  await seedOffer('nearby-private','nearbyVendor',{status:'draft'});
+  const db=testEnv.authenticatedContext('nearbyCustomer').firestore();
+  const bounded=db.collection('offers').where('status','==','active').orderBy('geohash').startAt('tf3').endAt('tf3~');
+  const results=await assertSucceeds(bounded.get());
+  assert.deepEqual(results.docs.map(d=>d.id),['nearby-public']);
+  await assertFails(db.collection('offers').orderBy('geohash').startAt('tf3').endAt('tf3~').get());
+  await assertFails(db.doc('offers/nearby-private').get());
+  // Distance filtering is discovery, not a rule preventing a public direct read.
+  await assertSucceeds(db.doc('offers/nearby-public').get());
+});
+test('26. Confirmation snapshot must match the store and cannot be removed or altered',async()=>{
+  await seedUser('snapshotVendor','vendor','approved');
+  const db=testEnv.authenticatedContext('snapshotVendor').firestore();
+  const store=(await db.doc('vendors/snapshotVendor').get()).data();
+  const value={...offerData('snapshotVendor'),locationConfirmedAt:store.locationConfirmedAt};
+  await assertSucceeds(db.doc('offers/snapshot').set(value));
+  await assertFails(db.doc('offers/snapshot').update({locationConfirmedAt:new Date(0)}));
+  await assertFails(db.doc('offers/snapshot').set(offerData('snapshotVendor')));
+  await assertFails(db.doc('offers/forged-snapshot').set({...value,locationConfirmedAt:new Date(0)}));
+  // Reviewed Phase 3 records may acquire the marker only from a matching store.
+  await assertSucceeds(db.doc('offers/legacy-snapshot').set(offerData('snapshotVendor')));
+  await assertSucceeds(db.doc('offers/legacy-snapshot').update({locationConfirmedAt:store.locationConfirmedAt}));
+});

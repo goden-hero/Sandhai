@@ -67,16 +67,20 @@ service cloud.firestore {
           (request.resource.data.role == 'vendor' && request.resource.data.approvalStatus == 'pending') ||
           (request.resource.data.role == 'customer' && (request.resource.data.approvalStatus == 'approved' || request.resource.data.approvalStatus == 'n/a'))
         )
-        && request.resource.data.createdAt is timestamp;
+        && request.resource.data.createdAt is timestamp
+        && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp);
 
       // User profile update: User CANNOT change their 'role' OR 'approvalStatus' fields
       allow update: if isOwner(uid)
+        && request.resource.data.keys().hasAll(['displayName', 'email', 'role', 'approvalStatus', 'createdAt'])
         && request.resource.data.keys().hasOnly(['displayName', 'email', 'role', 'approvalStatus', 'createdAt', 'updatedAt'])
         && request.resource.data.role == resource.data.role
         && request.resource.data.approvalStatus == resource.data.approvalStatus
         && request.resource.data.displayName is string
         && request.resource.data.displayName.size() >= 1
         && request.resource.data.displayName.size() <= 100
+        && request.resource.data.email is string
+        && (!('updatedAt' in request.resource.data) || request.resource.data.updatedAt is timestamp)
         && request.resource.data.createdAt == resource.data.createdAt;
 
       // User profile cannot be deleted directly by clients
@@ -121,7 +125,11 @@ service cloud.firestore {
         || (d.keys().hasAll(['imagePath','imageContentType','imageSize'])
           && d.imageUrl.matches('https?://.*')
           && d.imagePath is string
-          && d.imagePath.matches('offers/' + request.auth.uid + '/' + offerId + '/[a-f0-9]{64}\\.(jpg|png|webp)')
+          && d.imagePath.split('/').size() == 4
+          && d.imagePath.split('/')[0] == 'offers'
+          && d.imagePath.split('/')[1] == request.auth.uid
+          && d.imagePath.split('/')[2] == offerId
+          && d.imagePath.split('/')[3].matches('[a-f0-9]{64}\\.(jpg|png|webp)')
           && d.imageSize is int && d.imageSize > 0 && d.imageSize <= 5 * 1024 * 1024
           && ((d.imageContentType == 'image/jpeg' && d.imagePath.matches('.*\\.jpg'))
             || (d.imageContentType == 'image/png' && d.imagePath.matches('.*\\.png'))
@@ -129,7 +137,8 @@ service cloud.firestore {
     }
     function validOffer(d) {
       return d.keys().hasAll(['vendorId','title','description','category','oldPrice','newPrice','imageUrl','latitude','longitude','geohash','createdAt','expiryTime','status'])
-        && d.keys().hasOnly(['vendorId','title','description','category','oldPrice','newPrice','imageUrl','imagePath','imageContentType','imageSize','latitude','longitude','geohash','createdAt','expiryTime','status'])
+        && d.keys().hasOnly(['vendorId','title','description','category','oldPrice','newPrice','imageUrl','imagePath','imageContentType','imageSize','latitude','longitude','geohash','locationConfirmedAt','createdAt','expiryTime','status'])
+        && (!('locationConfirmedAt' in d) || (d.locationConfirmedAt is timestamp && d.locationConfirmedAt <= request.time))
         && d.vendorId is string && d.vendorId == request.auth.uid
         && d.title is string && d.title.size() >= 1 && d.title.size() <= 100
         && d.description is string && d.description.size() <= 1000
@@ -144,19 +153,29 @@ service cloud.firestore {
     function confirmedStore(d) {
       let store = get(/databases/$(database)/documents/vendors/$(request.auth.uid)).data;
       return store.locationConfirmedAt is timestamp && store.locationConfirmedAt <= request.time
-        && d.latitude == store.latitude && d.longitude == store.longitude && d.geohash == store.geohash;
+        && d.latitude == store.latitude && d.longitude == store.longitude && d.geohash == store.geohash
+        && (!('locationConfirmedAt' in d) || d.locationConfirmedAt == store.locationConfirmedAt);
+    }
+    // Permit minor client clock drift, but never an unlimited offer lifetime.
+    function validPublicationTime(d) {
+      return d.createdAt >= request.time - duration.value(5, 'm')
+        && d.createdAt <= request.time + duration.value(5, 'm')
+        && d.expiryTime > request.time
+        && d.expiryTime <= d.createdAt + duration.value(24, 'h');
     }
     // --- OFFERS COLLECTION ---
     // Document ID: {offerId}
     match /offers/{offerId} {
-      // Needed for online idempotent create transactions to read a missing ID.
-      allow get: if isApprovedVendor()
+      // Revoked vendors may establish absence for safe orphan cleanup. This
+      // grants no reads of existing private offers; writes still need approval.
+      allow get: if isVendor()
         && !exists(/databases/$(database)/documents/offers/$(offerId));
       // Anyone can read active offers; vendors can read all their own offers
       allow read: if (resource.data.status == 'active')
         || (isAuthenticated() && resource.data.vendorId == request.auth.uid);
 
       allow create: if isApprovedVendor() && validOffer(request.resource.data)
+        && validPublicationTime(request.resource.data)
         && confirmedStore(request.resource.data) && validImage(request.resource.data, offerId)
         && request.resource.data.status in ['active','draft'];
       // Legacy documents remain readable. Any future edit must explicitly add a
@@ -167,7 +186,13 @@ service cloud.firestore {
         && request.resource.data.latitude == resource.data.latitude
         && request.resource.data.longitude == resource.data.longitude
         && request.resource.data.geohash == resource.data.geohash
+        && (!('locationConfirmedAt' in resource.data)
+          ? (!('locationConfirmedAt' in request.resource.data) || confirmedStore(request.resource.data))
+          : request.resource.data.locationConfirmedAt == resource.data.locationConfirmedAt)
         && validOffer(request.resource.data)
+        && (request.resource.data.expiryTime == resource.data.expiryTime
+          || (request.resource.data.expiryTime > request.time
+            && request.resource.data.expiryTime <= resource.data.createdAt + duration.value(24, 'h')))
         && (validImage(request.resource.data, offerId)
           || (!resource.data.keys().hasAny(['imagePath','imageContentType','imageSize'])
             && request.resource.data.imageUrl == resource.data.imageUrl

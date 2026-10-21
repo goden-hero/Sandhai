@@ -6,9 +6,10 @@
   "scripts": {
     "test": "node --test test/widget_and_model_test.js",
     "test:rules": "node --test test/rules.test.js",
-    "test:emulators": "NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy= firebase emulators:exec --config firebase.phase3-tests.json --only firestore,storage,auth --project sandhai-phase3-tests \"node --test test/rules.test.js\"",
+    "test:emulators": "bash tool/test_emulators.sh",
     "test:browser:emulators": "NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy= firebase emulators:exec --only firestore,storage,auth --project sandhai-5km-demo \"node tool/verify_phase2_browser.cjs\"",
-    "test:browser:phase3": "NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy= node tool/verify_phase3_browser.cjs"
+    "test:browser:phase3": "NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy= node tool/verify_phase3_browser.cjs",
+    "test:browser:phase4": "NO_PROXY=127.0.0.1,localhost,::1 HTTP_PROXY= http_proxy= HTTPS_PROXY= https_proxy= node tool/verify_phase4_browser.cjs"
   },
   "keywords": [],
   "author": "",

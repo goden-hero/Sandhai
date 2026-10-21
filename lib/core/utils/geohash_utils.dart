@@ -5,9 +5,9 @@
 class GeohashUtils {
   static const String _base32Chars = '0123456789bcdefghjkmnpqrstuvwxyz';
 
-  /// Standard geohash precision for 5KM Sandhai nearby discovery.
+  /// Stored coordinate precision; query bounds use a separate adaptive precision.
   /// Precision 6 corresponds to a bounding box of roughly 1.2 km x 0.6 km,
-  /// providing optimal spatial resolution for 5 KM clearance offer radius queries.
+  /// Radius coverage is calculated by NearbyGeometry, never by nine such cells.
   static const int defaultPrecision = 6;
 
   /// Encodes latitude and longitude into a deterministic base32 geohash.
@@ -78,7 +78,8 @@ class GeohashUtils {
 
   /// Checks if latitude and longitude are valid non-null coordinates.
   ///
-  /// Rejects nulls, out-of-bound values, and uninitialized (0.0, 0.0) positions.
+  /// Rejects missing/nonfinite/out-of-bound values. Confirmation is separate;
+  /// an explicitly reviewed (0,0) position is valid.
   static bool isValidLocation(double? lat, double? lng) {
     if (lat == null || lng == null) return false;
     if (!lat.isFinite || !lng.isFinite) return false;

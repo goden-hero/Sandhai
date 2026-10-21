@@ -36,10 +36,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(OfferCard), findsNothing);
       expect(find.text('Simulate Empty:'), findsNothing);
-      expect(
-        find.text('Nearby discovery is not connected yet'),
-        findsOneWidget,
-      );
+      expect(find.text('Nearby offers • Within 5 km'), findsOneWidget);
       await tester.tap(find.byTooltip('Profile & Settings'));
       await tester.pumpAndSettle();
       expect(find.text('Real customer'), findsOneWidget);

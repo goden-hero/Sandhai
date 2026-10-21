@@ -196,6 +196,7 @@ class OfferService {
         longitude: lng!,
         geohash: GeohashUtils.encode(lat, lng),
         createdAt: now,
+        locationConfirmedAt: vendorProfile!.locationConfirmedAt,
         expiryTime: now.add(
           Duration(hours: durationHours > 0 ? durationHours : 6),
         ),

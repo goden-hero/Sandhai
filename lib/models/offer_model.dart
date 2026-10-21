@@ -17,6 +17,7 @@ class OfferModel {
   final double? longitude;
   final String geohash;
   final DateTime createdAt;
+  final DateTime? locationConfirmedAt;
   final DateTime expiryTime;
   final String status; // 'active' | 'expired' | 'deleted' | 'draft'
 
@@ -36,6 +37,7 @@ class OfferModel {
     required this.longitude,
     required this.geohash,
     required this.createdAt,
+    this.locationConfirmedAt,
     required this.expiryTime,
     required this.status,
   });
@@ -59,6 +61,8 @@ class OfferModel {
       longitude: (data['longitude'] as num?)?.toDouble(),
       geohash: data['geohash'] ?? '',
       createdAt: (data['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      locationConfirmedAt: (data['locationConfirmedAt'] as Timestamp?)
+          ?.toDate(),
       expiryTime:
           (data['expiryTime'] as Timestamp?)?.toDate() ??
           DateTime.now().add(const Duration(hours: 24)),
@@ -82,6 +86,8 @@ class OfferModel {
       'longitude': longitude,
       'geohash': geohash,
       'createdAt': Timestamp.fromDate(createdAt),
+      if (locationConfirmedAt != null)
+        'locationConfirmedAt': Timestamp.fromDate(locationConfirmedAt!),
       'expiryTime': Timestamp.fromDate(expiryTime),
       'status': status,
     };

@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
 
 import '../../../models/offer_model.dart';
+import '../../../core/widgets/offer_photo.dart';
+import '../../../core/constants/offer_categories.dart';
 
 class OfferCard extends StatelessWidget {
   final OfferModel offer;
   final VoidCallback? onTap;
+  final double? distanceMetres;
+  final bool demo;
 
-  const OfferCard({super.key, required this.offer, this.onTap});
+  const OfferCard({
+    super.key,
+    required this.offer,
+    this.onTap,
+    this.distanceMetres,
+    this.demo = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -25,44 +35,21 @@ class OfferCard extends StatelessWidget {
             // Image Placeholder with Discount & Expiry Badges
             Stack(
               children: [
-                Container(
-                  height: 140,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(16),
-                    ),
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.orange.shade100,
-                        Colors.deepOrange.shade50,
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    ),
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
                   ),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.local_offer_outlined,
-                          size: 42,
-                          color: Theme.of(context).colorScheme.primary
-                              .withValues(alpha: 0.7),
+                  child: offer.imageUrl.isNotEmpty
+                      ? OfferPhoto(
+                          url: offer.imageUrl,
+                          width: double.infinity,
+                          height: 140,
+                        )
+                      : const SizedBox(
+                          height: 140,
+                          width: double.infinity,
+                          child: Icon(Icons.local_offer_outlined, size: 42),
                         ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '[Image Placeholder]',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
                 ),
                 // Discount Badge
                 Positioned(
@@ -180,7 +167,9 @@ class OfferCard extends StatelessWidget {
                             ),
                             const SizedBox(width: 2),
                             Text(
-                              '1.2 km (Mock)',
+                              distanceMetres == null
+                                  ? 'Distance unavailable'
+                                  : '${(distanceMetres! / 1000).toStringAsFixed(2)} km${demo ? ' (Mock)' : ''}',
                               style: TextStyle(
                                 fontSize: 11,
                                 color: Colors.blue.shade700,
@@ -200,6 +189,7 @@ class OfferCard extends StatelessWidget {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
+                  Text(OfferCategories.label(offer.category)),
                   const SizedBox(height: 4),
                   Text(
                     offer.description,
@@ -317,7 +307,7 @@ class OfferCard extends StatelessWidget {
                   SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      'Demo Preview: WhatsApp/Call functionality will be connected to live vendor phone data in later tasks.',
+                      'Contact links will be available in a later update.',
                       style: TextStyle(fontSize: 12),
                     ),
                   ),

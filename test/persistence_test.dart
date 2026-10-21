@@ -259,6 +259,25 @@ void main() {
       await expectLater(save(), throwsA(isA<AppFailure>()));
       expect(offers.saves, 0);
     });
+    test('revocation between upload and publication cleans an absent offer and retries the same ID', () async {
+      final uid = auth.identity!.uid;
+      offers.afterUpload = () async {
+        accounts.approval(uid, 'suspended');
+        offers.failSave = true;
+        await settleSession();
+      };
+      await expectLater(save(image: true), throwsA(isA<AppFailure>()));
+      expect(offers.cleanups, 1);
+      expect(offers.offers, isEmpty);
+      expect(auth.profile!.isApprovedVendor, isFalse);
+      accounts.approval(uid, 'approved');
+      await settleSession();
+      offers.afterUpload = null;
+      offers.failSave = false;
+      await save(image: true);
+      expect(offers.offers.values.single.id, 'stable-id');
+      expect(offers.offers, hasLength(1));
+    });
     test('dashboard subscriptions only return their account and reject stale account access', () async {
       await save();
       final uid = auth.identity!.uid;

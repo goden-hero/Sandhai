@@ -26,7 +26,7 @@
 - **Confirmed saves**: Online Firestore transactions distinguish pending operations from confirmed saves. Failed profile/offer saves display errors and retain form values for retry. Each offer form keeps a stable document ID to reconcile lost responses without duplicate offers. Failed uploads stop publication; confirmed unreferenced uploads are cleaned up when possible. An uncertain commit retains its image until the outcome can be checked.
 
 ### 📍 4. Spatial Geolocation & Deterministic Geohashing
-- **Deterministic Base32 Geohash Utility (`GeohashUtils`)**: Generates 6-character spatial geohashes (~1.2 km x 0.6 km bounding box) for stored spatial indexing. Radius-aware query coverage and exact distance filtering remain future work.
+- **Deterministic Base32 Geohash Utility (`GeohashUtils`)**: Generates 6-character spatial geohashes (~1.2 km x 0.6 km bounding box) for stored spatial indexing. Nearby queries cover a radius-derived bounding rectangle at adaptive precision, merge live results, and apply an unrounded 5,000 m distance filter.
 - **Vendor Store Location Resolution**: Offers automatically inherit registered vendor store coordinates (`latitude`, `longitude`, `geohash`) from `vendors/{uid}`.
 - **Strict Location Validation**: The offer service rejects invalid coordinates, but registration starts without coordinates. Vendors explicitly confirm or correct a foreground device-location suggestion, or manually enter coordinates. A server confirmation timestamp gates publication; legacy coordinates without confirmation cannot publish.
 
@@ -152,8 +152,7 @@ an error screen and do not open demo mode. Successful Firebase initialization
 configures the SDK; it does not prove the emulator services are reachable.
 The Firebase project configuration and query indexes are retained. Rules support
 atomic registration, private vendor queries, and owner upload cleanup after
-revocation. Firebase-mode customer discovery shows an explicit empty state until
-nearby discovery is implemented; it never substitutes demo offers after errors.
+revocation. Firebase-mode customers explicitly request foreground location and receive persisted active nearby offers. Permission, loading, query errors and empty results have separate states; errors never substitute demo data.
 
 Auth sessions persist locally, while Firestore disk persistence is disabled.
 Writes use online transactions and are acknowledged by the server before success
@@ -227,11 +226,10 @@ Firebase security-rules tests; they do not compile or execute Dart:
 
 ```bash
 npm test
-firebase emulators:exec --only firestore,storage,auth --project sandhai-5km-demo "node --test test/rules.test.js"
+npm run test:emulators
 ```
 
-`npm run test:emulators` uses the Firebase CLI installed above, with local proxy
-bypass and an explicit project. `emulators:exec` runs tests and shuts down; use
+`npm run test:emulators` uses the Firebase CLI installed above, local proxy bypass, separate test ports/project, and a unique TMPDIR for Storage isolation. `emulators:exec` runs tests and shuts down; use
 `emulators:start` when running the app interactively.
 
 The browser regression uses a built emulator-mode app, real Auth/Firestore SDKs,
@@ -394,13 +392,13 @@ firebase emulators:export /tmp/sandhai-before-phase3 --config firebase.json --pr
 npm test
 flutter analyze
 flutter test
-# Separate ports/project: the rules suite clears only its test database.
+# Separate ports/project and TMPDIR: clears only its test database.
 npm run test:emulators
 ```
 
 `firebase.phase3-tests.json` uses Firestore 8180, Storage 9299, Auth 9198,
 hub 4401, logging 4501, and websocket 9250, with project `sandhai-phase3-tests`.
-Do not point the destructive rules suite at retained developer fixtures.
+Do not point the destructive rules suite at retained developer fixtures. Firebase CLI 15.31.0 also shares Storage temporary blobs across projects by default: `tool/test_emulators.sh` isolates TMPDIR as well as ports, keeps its logs in the printed temporary directory, and prevents test shutdown from deleting live Storage files. If you set TMPDIR when starting development emulators, use that same TMPDIR when running `emulators:export` so the CLI can find its hub.
 
 With the ordinary Auth/Firestore/Storage emulators running on 9099/8080/9199:
 
@@ -423,3 +421,142 @@ Dart integration uses a documented coordinate/PNG fixture and real Firebase SDKs
 permission/GPS and actual Android photo picker. See the Phase 3 report for exact
 phone commands, evidence, and any unverified checks. Production remains unverified
 until real Firebase configuration is supplied.
+
+## Nearby customer offers (Phase 4)
+
+In emulator/production mode, sign in as a customer and select **Use my location**.
+The shared service requests one foreground fix; it does not track in the background.
+Enable location services and grant app/browser permission (web requires HTTPS or
+localhost). Permission failures expose retry/settings controls. **Update customer
+location** replaces the center and subscriptions; pull to refresh or **Refresh
+nearby offers** queries the current center again. Search and category chips filter
+the bounded candidate set locally. Demo mode alone uses sample offers/distances.
+
+Each Firestore query is:
+
+```dart
+FirebaseFirestore.instance.collection('offers')
+  .where('status', isEqualTo: 'active').orderBy('geohash')
+  .startAt([bound.start]).endAt([bound.end]);
+```
+
+`NearbyGeometry` projects the spherical 5,000 m cap to a latitude/longitude
+rectangle, splits date-line crossings, and enumerates all intersecting geohash
+cells. Precision adapts from 6 down to 1 to keep at most 32 bounds. Prefix ranges
+are `[prefix, prefix + '~']`; the stored geohash remains six characters. This
+covers the whole radius; nine adjacent stored cells would not. At extreme
+latitudes, larger cells mean more false-positive reads. It never issues an
+unbounded offers query. The committed composite index is **status ASC, geohash
+ASC**, collection scope. Existing vendor indexes remain. Deploy rules/indexes to
+your configured staging project and wait for index readiness before cloud testing:
+
+```bash
+firebase deploy --only firestore:rules,firestore:indexes --project <staging-project-id>
+```
+
+Do not infer cloud index readiness from the emulator: it does not enforce cloud
+composite-index availability. No staging/production configuration is currently
+available; cloud index verification remains blocked.
+
+Results merge by document ID, apply canonical finite coordinates and confirmation
+checks, and sort by unrounded Haversine distance then document ID. The spherical
+Earth radius is **6,371,000 m**; inclusion is `distanceMetres <= 5000` and
+`expiryTime > now`. Display rounding never determines inclusion. `expiryTime`
+is the existing schema field (there is no `expiresAt` rename).
+
+New publications also snapshot `locationConfirmedAt` from the confirmed store;
+rules require it to match and preserve it thereafter. Earlier Phase 3 offers
+without this field are discoverable only when the current store's confirmed
+coordinates/geohash still match and its confirmation predates the publication.
+Older sample/unconfirmed positions are excluded. Reconfirming/moving a store can
+therefore hide an old marker-less offer; a reviewed matching snapshot can be
+backfilled under the rules, or republished in a future offer lifecycle workflow.
+Never bulk-confirm legacy coordinates. Missing/unknown categories still use
+`other`. Malformed documents are skipped rather than breaking discovery.
+
+The time source is the **customer device/browser wall clock (`DateTime.now`)**,
+not an asserted server time. A cancellable timer targets the earliest visible
+expiry, capped at one minute for wall-clock adjustment checks and browser timer limits, and checks again on firing; application resume rechecks immediately before
+showing offers. Query events also re-evaluate expiry. Correct expiry depends on
+a reasonably correct system clock. Tests inject both clock and timer behavior.
+Expiry filtering does not modify Firestore or automatically change offer status.
+
+Any bound/vendor-read failure terminates the search and shows an error with retry;
+no partial list or mock fallback is presented as a successful empty result. The
+initial search requires server-confirmed snapshots and reports a connection error
+if those do not arrive within 25 seconds. Refresh, account change and disposal
+cancel obsolete watches/timers; generation guards reject late callbacks.
+
+**5 km is a discovery filter, not access control.** Rules still permit direct
+reads of active public offers regardless of the reader's distance. Private vendor
+dashboard queries remain scoped to that vendor UID.
+
+```bash
+flutter test test/nearby_offers_test.dart test/nearby_widget_test.dart
+npm run test:emulators
+flutter build web --dart-define=APP_MODE=emulator --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1 --output=build/emulator-web
+# With the regular developer emulators already running; creates synthetic fixtures
+SANDHAI_ARTIFACTS=/tmp/sandhai-phase4-browser npm run test:browser:phase4
+JAVA_HOME=/absolute/path/to/jdk-21 flutter test integration_test/nearby_offers_test.dart -d 373c972d --dart-define=APP_MODE=emulator --dart-define=FIREBASE_EMULATOR_HOST=127.0.0.1 --dart-define=FIREBASE_EMULATOR_PROJECT_ID=sandhai-5km-demo
+```
+
+For the paired normal-app phone/Chrome probe, set `SANDHAI_PHONE=1` on the browser
+command. After its `READY` message, run `tool/verify_phase4_android.py` with
+`--adb <absolute-adb-path> --serial 373c972d --artifacts <same-directory>` and
+`--stage customer`, then `--stage observe` after `published.json`, and
+`--stage expiry` after `expiry-start.json`. Install a normal emulator APK first
+and apply all three USB reverse mappings. The customer stage signs out the current
+phone account, signs into the synthetic customer, verifies force-close/reopen,
+and requests real GPS. Browser positioning is controlled for reproducibility;
+`SANDHAI_CENTER` can specify a JSON latitude/longitude near the physical phone.
+No production endpoint, app-data reset, or collection reset is involved. Preserve
+fixture exports before running probes. See [the Phase 4 report](phase_4_nearby_offers.md)
+for recorded device evidence, commands and limitations.
+
+## Phase 4.1 audit and controlled staging
+
+See [phase_4_1_staging_readiness.md](phase_4_1_staging_readiness.md) for actual
+verification evidence and [the staging procedure](docs/phase_4_1_staging_procedure.md)
+for the approval-gated cloud steps. No dedicated staging project is configured;
+emulator success does not verify deployed cloud indexes or production behavior.
+Do not use production as a staging substitute or treat `deploy --dry-run` as
+read-only (the installed CLI may enable APIs).
+
+Nearby searches use an **inclusive, unrounded distance <= 5,000 m** on a sphere
+of radius 6,371,000 m. Device wall time determines expiry; the feed rechecks on
+resume and at the next expiry (at most a minute between wall-clock rechecks).
+Expiry removes a visible offer without deleting its Firestore document. A
+post-confirmation loss of server confirmation lasting five seconds clears
+results and shows a retry error; brief query-reconciliation metadata transitions
+may recover within that grace window. Expiry filtering continues meanwhile;
+reconnect and select **Retry nearby offers**. Initial cached results never
+establish a confirmed empty feed. Opening the profile releases nearby listeners;
+returning opens a fresh search at the retained center. Changing accounts clears
+that center and the previous results.
+
+At most 32 disjoint prefix queries bound the search geographically, but there is
+no candidate-document limit: dense areas and coarse polar cells can still be
+expensive. This diagnostic generates deterministic local fixtures and records
+query, candidate, duplicate and final-result counts; it performs no cloud reads:
+
+```bash
+dart run tool/benchmark_nearby.dart
+flutter test test/phase_4_1_geospatial_test.dart test/phase_4_1_performance_test.dart
+flutter test test/phase_4_1_lifecycle_test.dart test/phase_4_1_lifecycle_widget_test.dart
+npm run test:emulators
+```
+
+The isolated emulator script now runs both rules files serially, retaining its
+unique TMPDIR and separate ports. New publications require a creation timestamp
+within five minutes of server request time, future expiry, and a duration at
+most 24 hours. Changing expiry cannot extend beyond 24 hours from original
+creation. Existing legacy expiry values can remain unchanged on unrelated edits;
+legacy reads require no bulk migration. A substantially incorrect device clock
+can cause publication rejection; correct the clock and retry the retained form.
+Profile updates must retain all required fields and timestamp types.
+
+Rules validate coordinate bounds and geohash format/store equality, not the
+mathematical correspondence or physical truth of a vendor's chosen location.
+The feed rejects noncanonical coordinate/hash pairs. Approval revocation blocks
+new writes/uploads but does not automatically deactivate already active offers.
+The 5 km filter is discovery behavior, not an access-control boundary.

@@ -140,8 +140,8 @@ async function createAccount(email) {
     await page.getByRole('button',{name:/I'm here to shop/}).click();
     await text('Customer Registration');
     for(const [i,value] of ['Persisted customer',`phase2-customer-${stamp}@example.com`,password,password].entries())await fill(i,value);
-    await button('Create Customer Account');await text('Nearby discovery is not connected yet');
-    await open(true);await text('Nearby discovery is not connected yet');
+    await button('Create Customer Account');await text('Nearby offers • Within 5 km');
+    await open(true);await text('Nearby offers • Within 5 km');
     assert.equal(await page.getByText('Simulate Empty:',{exact:false}).count(),0);
     await button('Profile & Settings');await text('Persisted customer');
     assert.equal(await page.getByText('Mock 5 KM',{exact:false}).count(),0);
